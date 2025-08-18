@@ -1,0 +1,1586 @@
+import React, { useMemo, useRef, useState } from "react";
+import {
+  Plus,
+  Trash2,
+  Download,
+  Upload,
+  Copy,
+  ChevronDown,
+  ChevronRight,
+  ChevronLeft,
+  ChevronUp,
+  Heading1,
+  Bold,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  Quote,
+  Code,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import EmojiPickerReact from "emoji-picker-react";
+
+// =====================
+// Types
+// =====================
+export type Locale = "en-US" | "pt-BR" | "de" | "ja" | "zh-CN" | string;
+
+type Localization<T = string> = { default: T } & Partial<Record<Locale, T>>;
+
+type LabelString = string & { __brand_label100?: true };
+
+export type LabelLocalization = { default: LabelString } & Partial<Record<Locale, LabelString>>;
+
+interface BaseStat {
+  id: number;
+  name: LabelLocalization;
+  edit_page?: number[]; // Seções (por id) onde o stat pode ser editado
+  emoji?: string;
+}
+
+interface StatsNumeric extends BaseStat { type: "numeric"; min?: number; max?: number; }
+interface StatsEnumOption { value: number; name: LabelLocalization; emoji?: string; }
+interface StatsEnum extends BaseStat { type: "enum"; options: StatsEnumOption[] | number; dices?: Dice[]; replacements?: Replacement[]; }
+interface StatsBoolean extends BaseStat { type: "boolean"; }
+interface StatsString extends BaseStat { type: "string"; maxLength?: number; minLength?: number; }
+interface StatsCalculated extends BaseStat { type: "calculated"; formula: string; dices?: Dice[]; replacements?: Replacement[]; }
+interface Replacement { key: number; options: number[]; }
+interface StatsExtraDice extends BaseStat { type: "view"; component: string; dices?: Dice[]; }
+
+export type Stats = StatsNumeric | StatsEnum | StatsBoolean | StatsString | StatsCalculated | StatsExtraDice;
+
+export interface RPGSystem {
+  config: { id: number; name: LabelLocalization; description: Localization<string>; };
+  stats: Stats[];
+  sections: Section[];
+}
+
+interface Section {
+  id: number;
+  name: LabelLocalization;
+  emoji?: string;
+  quick_edit_btn: boolean;
+  preview: { type: "string" | "img"; content: Localization<string>; };
+  view_pages: number[]; // Seções (ids) onde ESTA seção também aparece (para aglomerar com outras páginas)
+}
+
+interface Dice { expression: string; condition?: { value1: string; operator: "<"|">"|"<="|">="|"=="|"!="; value2: string; }; }
+
+// =====================
+// Helpers
+// =====================
+const emptyLabelLoc = (): LabelLocalization => ({ default: "" });
+function clone<T>(v: T): T { return JSON.parse(JSON.stringify(v)); }
+function download(filename: string, text: string) {
+  const element = document.createElement("a");
+  const file = new Blob([text], { type: "application/json" });
+  element.href = URL.createObjectURL(file);
+  element.download = filename;
+  document.body.appendChild(element); element.click(); element.remove();
+}
+function nextId(list: { id: number }[]): number { return (list.reduce((m, x) => Math.max(m, x.id), 0) || 0) + 1; }
+function allLocalesFrom(value: Localization<string>, base: Locale[]): (Locale | "default")[] {
+  const keys = Object.keys(value || {}) as (Locale | "default")[];
+  const set = new Set<Locale | "default">(["default", ...base, ...keys.filter((k) => k !== "default")]);
+  return Array.from(set);
+}
+
+// =====================
+// Smart Preview Components
+// =====================
+const SmartPreview = ({ value, sections = [], stats = [], locale = 'default' }: {
+  value: string;
+  sections?: Section[];
+  stats?: Stats[];
+  locale?: string;
+}) => {
+  // Função para resolver valor real de uma variável
+  const resolveVariableValue = (type: string, id: string, property: string): string => {
+    const numId = parseInt(id);
+    
+    if (type === 'stat') {
+      const stat = stats.find(s => s.id === numId);
+      if (!stat) return `[Stat ${id} não encontrado]`;
+      
+      switch (property) {
+        case 'name':
+          return stat.name?.[locale] || stat.name?.default || `Stat ${id}`;
+        case 'emoji':
+          return stat.emoji || '';
+        case 'value':
+          switch (stat.type) {
+            case 'numeric':
+              return String(stat.min || 1);
+            case 'string':
+              return 'string';
+            case 'boolean':
+              return 'false';
+            case 'enum':
+              if (Array.isArray(stat.options) && stat.options.length > 0) {
+                const firstOption = stat.options[0];
+                return firstOption.name?.[locale] || firstOption.name?.default || 'Option 1';
+              } else if (typeof stat.options === 'number' && stat.options > 0) {
+                // Está referenciando outro enum
+                const referencedStat = stats.find(s => s.id === stat.options) as StatsEnum | undefined;
+                if (referencedStat && Array.isArray(referencedStat.options) && referencedStat.options.length > 0) {
+                  const firstOption = referencedStat.options[0];
+                  return firstOption.name?.[locale] || firstOption.name?.default || 'Option 1';
+                }
+                return `[ref: ${stat.options}]`;
+              }
+              return 'enum';
+            case 'calculated':
+              return '[calculado]';
+            case 'view':
+              return '[view]';
+            default:
+              return 'valor';
+          }
+        default:
+          return `[propriedade ${property} desconhecida]`;
+      }
+    } else if (type === 'section') {
+      const section = sections.find(s => s.id === numId);
+      if (!section) return `[Seção ${id} não encontrada]`;
+      
+      switch (property) {
+        case 'name':
+          return section.name?.[locale] || section.name?.default || `Seção ${id}`;
+        case 'emoji':
+          return section.emoji || '';
+        default:
+          return `[propriedade ${property} desconhecida]`;
+      }
+    }
+    
+    return `[tipo ${type} desconhecido]`;
+  };
+
+  // Processar variáveis para valores reais
+  const processedValue = value.replace(/<(stat|section):(\d+):(name|value|emoji)>/g, (_, type, id, property) => {
+    return resolveVariableValue(type, id, property);
+  });
+
+  // Componentes customizados para markdown
+  const components = {
+    h1: ({ children }: any) => <h1 className="text-2xl font-bold mb-4 mt-6 first:mt-0 border-b pb-2">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="text-xl font-semibold mb-3 mt-5 first:mt-0">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="text-lg font-medium mb-2 mt-4 first:mt-0">{children}</h3>,
+    h4: ({ children }: any) => <h4 className="text-base font-medium mb-2 mt-3 first:mt-0">{children}</h4>,
+    h5: ({ children }: any) => <h5 className="text-sm font-medium mb-1 mt-2 first:mt-0">{children}</h5>,
+    h6: ({ children }: any) => <h6 className="text-xs font-medium mb-1 mt-2 first:mt-0">{children}</h6>,
+    p: ({ children }: any) => <p className="mb-3 last:mb-0">{children}</p>,
+    ul: ({ children }: any) => <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>,
+    ol: ({ children }: any) => <ol className="list-decimal list-inside mb-3 space-y-1">{children}</ol>,
+    li: ({ children }: any) => <li className="pl-2">{children}</li>,
+    blockquote: ({ children }: any) => <blockquote className="border-l-4 border-muted pl-4 italic my-3">{children}</blockquote>,
+    code: ({ children, inline }: any) => inline ? 
+      <code className="bg-muted px-1 py-0.5 rounded text-sm font-mono">{children}</code> :
+      <code className="block bg-muted p-3 rounded-md text-sm font-mono whitespace-pre-wrap">{children}</code>,
+    pre: ({ children }: any) => <pre className="bg-muted p-3 rounded-md text-sm font-mono whitespace-pre-wrap overflow-x-auto mb-3">{children}</pre>,
+    a: ({ href, children }: any) => <a href={href} className="text-primary underline hover:no-underline" target="_blank" rel="noopener noreferrer">{children}</a>,
+  };
+
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none">
+      {processedValue?.trim() ? (
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm]}
+          components={components}
+        >
+          {processedValue}
+        </ReactMarkdown>
+      ) : (
+        <p className="text-muted-foreground">Nada para pré-visualizar.</p>
+      )}
+    </div>
+  );
+};
+
+// =====================
+// Markdown Editor
+// =====================
+function useInsertAtCursor(textarea: HTMLTextAreaElement | null) {
+  return (before: string, after: string = "", placeholder = "") => {
+    if (!textarea) return; const start = textarea.selectionStart ?? 0; const end = textarea.selectionEnd ?? 0;
+    const value = textarea.value; const selected = value.slice(start, end) || placeholder;
+    const next = value.slice(0, start) + before + selected + after + value.slice(end);
+    textarea.value = next; const caret = start + before.length + selected.length;
+    textarea.setSelectionRange(caret, caret); textarea.dispatchEvent(new Event("input", { bubbles: true })); textarea.focus();
+  };
+}
+function ToolbarButton({ onClick, children, title }: { onClick: () => void; children: React.ReactNode; title: string }) {
+  return (<Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onClick} title={title}>{children}</Button>);
+}
+function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [], locale = 'default' }: { 
+  value: string; 
+  onChange: (v: string) => void; 
+  placeholder?: string;
+  sections?: Section[];
+  stats?: Stats[];
+  locale?: string;
+}) {
+  const [tab, setTab] = useState<"write" | "preview">("write");
+  const [showVariables, setShowVariables] = useState(false);
+  const [currentPath, setCurrentPath] = useState<string[]>([]);
+  const [variableFilter, setVariableFilter] = useState("");
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  const insert = useInsertAtCursor(ref.current);
+
+  // Estrutura hierárquica do menu
+  const menuStructure = useMemo(() => {
+    const structure: any = {
+      stats: {
+        label: "Stats",
+        icon: "📊",
+        children: {}
+      },
+      sections: {
+        label: "Seções", 
+        icon: "📄",
+        children: {}
+      }
+    };
+
+    // Adicionar stats
+    stats.forEach(stat => {
+      structure.stats.children[stat.id] = {
+        label: stat.name?.default || `Stat ${stat.id}`,
+        icon: "⚡",
+        children: {
+          name: { label: "Nome", value: `<stat:${stat.id}:name>`, icon: "🏷️" },
+          value: { label: "Valor", value: `<stat:${stat.id}:value>`, icon: "🔢" },
+          emoji: { label: "Emoji", value: `<stat:${stat.id}:emoji>`, icon: "😀" }
+        }
+      };
+    });
+
+    // Adicionar seções
+    sections.forEach(section => {
+      structure.sections.children[section.id] = {
+        label: section.name?.default || `Seção ${section.id}`,
+        icon: "📋",
+        children: {
+          name: { label: "Nome", value: `<section:${section.id}:name>`, icon: "🏷️" },
+          emoji: { label: "Emoji", value: `<section:${section.id}:emoji>`, icon: "😀" }
+        }
+      };
+    });
+
+    return structure;
+  }, [sections, stats]);
+
+  // Navegar na estrutura
+  const getCurrentLevel = () => {
+    let current = menuStructure;
+    for (const path of currentPath) {
+      current = current[path]?.children || {};
+    }
+    return current;
+  };
+
+  // Filtrar itens do nível atual
+  const getFilteredItems = () => {
+    const currentLevel = getCurrentLevel();
+    return Object.entries(currentLevel).filter(([key, item]: [string, any]) => {
+      if (variableFilter === "") return true;
+      return item.label.toLowerCase().includes(variableFilter.toLowerCase()) ||
+             key.toLowerCase().includes(variableFilter.toLowerCase());
+    });
+  };
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    
+    onChange(newValue);
+    
+    // Verificar se digitou "/"
+    const textBeforeCursor = newValue.slice(0, cursorPos);
+    const lastSlashIndex = textBeforeCursor.lastIndexOf('/');
+    
+    if (lastSlashIndex !== -1) {
+      const textAfterSlash = textBeforeCursor.slice(lastSlashIndex + 1);
+      // Mostrar variáveis se "/" foi digitado e não há espaços depois
+      if (!textAfterSlash.includes(' ') && !textAfterSlash.includes('\n')) {
+        setVariableFilter(textAfterSlash);
+        setShowVariables(true);
+      } else {
+        setShowVariables(false);
+        setCurrentPath([]);
+      }
+    } else {
+      setShowVariables(false);
+      setCurrentPath([]);
+    }
+  };
+
+  // Handle keyboard events for variable deletion
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    const cursorPos = textarea.selectionStart;
+    
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      // Check if we're about to delete part of a variable
+      const variableRegex = /<(stat|section):(\d+):(name|value|emoji)>/g;
+      let match;
+      
+      while ((match = variableRegex.exec(value)) !== null) {
+        const [fullMatch] = match;
+        const varStart = match.index;
+        const varEnd = match.index + fullMatch.length;
+        
+        // If cursor is inside or at the boundary of a variable, delete the whole variable
+        if ((cursorPos > varStart && cursorPos <= varEnd) || 
+            (e.key === 'Backspace' && cursorPos === varStart) ||
+            (e.key === 'Delete' && cursorPos === varEnd)) {
+          e.preventDefault();
+          const newValue = value.slice(0, varStart) + value.slice(varEnd);
+          onChange(newValue);
+          
+          setTimeout(() => {
+            textarea.setSelectionRange(varStart, varStart);
+            textarea.focus();
+          }, 0);
+          return;
+        }
+      }
+    }
+  };
+
+  const handleMenuItemClick = (key: string, item: any) => {
+    if (item.value) {
+      // É uma variável final - inserir
+      insertVariable(item.value);
+    } else if (item.children) {
+      // Tem filhos - navegar mais fundo
+      setCurrentPath([...currentPath, key]);
+      setVariableFilter("");
+    }
+  };
+
+  const goBack = () => {
+    setCurrentPath(currentPath.slice(0, -1));
+    setVariableFilter("");
+  };
+
+  const insertVariable = (variable: string) => {
+    if (!ref.current) return;
+    
+    const textarea = ref.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const textBefore = value.slice(0, start);
+    const textAfter = value.slice(end);
+    
+    // Encontrar e remover o "/" e texto digitado após ele
+    const lastSlashIndex = textBefore.lastIndexOf('/');
+    const finalTextBefore = lastSlashIndex !== -1 ? textBefore.slice(0, lastSlashIndex) : textBefore;
+    
+    const newValue = finalTextBefore + variable + textAfter;
+    onChange(newValue);
+    
+    setShowVariables(false);
+    setCurrentPath([]);
+    setVariableFilter("");
+    
+    // Reposicionar cursor
+    setTimeout(() => {
+      const newPos = finalTextBefore.length + variable.length;
+      textarea.setSelectionRange(newPos, newPos);
+      textarea.focus();
+    }, 0);
+  };
+
+  // Gerar cor automática baseada no ID e tipo
+  const getVariableColor = (type: string, id: number) => {
+    const colors = [
+      'bg-red-100 text-red-800 border-red-200',
+      'bg-blue-100 text-blue-800 border-blue-200', 
+      'bg-green-100 text-green-800 border-green-200',
+      'bg-yellow-100 text-yellow-800 border-yellow-200',
+      'bg-purple-100 text-purple-800 border-purple-200',
+      'bg-pink-100 text-pink-800 border-pink-200',
+      'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'bg-orange-100 text-orange-800 border-orange-200',
+    ];
+    
+    const hash = (type + id).split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  // Renderizar variáveis como pills no texto (usado no editor)
+  const renderTextWithPills = (text: string) => {
+    const variableRegex = /<(stat|section):(\d+):(name|value|emoji)>/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = variableRegex.exec(text)) !== null) {
+      // Adicionar texto antes da variável
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      
+      // Adicionar a pill da variável
+      const [fullMatch, type, id, property] = match;
+      const numId = parseInt(id);
+      
+      // Obter o nome da entidade para exibir na pill
+      const entityName = (() => {
+        if (type === 'stat') {
+          const stat = stats.find(s => s.id === numId);
+          return stat?.name?.[locale] || stat?.name?.default || `Stat ${id}`;
+        } else if (type === 'section') {
+          const section = sections.find(s => s.id === numId);
+          return section?.name?.[locale] || section?.name?.default || `Seção ${id}`;
+        }
+        return `${type} ${id}`;
+      })();
+      
+      // Texto da pill: Nome da entidade + propriedade
+      const pillText = `${entityName} - ${property === 'name' ? 'Nome' : property === 'value' ? 'Valor' : property === 'emoji' ? 'Emoji' : property}`;
+      const colorClass = getVariableColor(type, numId);
+      
+      parts.push(
+        <span 
+          key={`${match.index}-${fullMatch}`} 
+          className={`inline cursor-pointer rounded border ${colorClass}`}
+          style={{ 
+            fontSize: '0.875rem',
+            lineHeight: '1.5rem',
+            padding: '0 2px',
+            display: 'inline',
+            verticalAlign: 'baseline',
+            whiteSpace: 'nowrap'
+          }}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteVariable(fullMatch);
+          }}
+          title={`Clique para deletar: ${fullMatch}`}
+        >
+          {pillText}
+        </span>
+      );
+      
+      lastIndex = match.index + fullMatch.length;
+    }
+    
+    // Adicionar texto restante
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    
+    return parts;
+  };
+
+  // Deletar variável completa
+  const deleteVariable = (variableToDelete: string) => {
+    const newValue = value.replace(variableToDelete, '');
+    onChange(newValue);
+    
+    // Reposicionar cursor após a deleção
+    setTimeout(() => {
+      if (ref.current) {
+        const newPos = value.indexOf(variableToDelete);
+        ref.current.setSelectionRange(newPos, newPos);
+        ref.current.focus();
+      }
+    }, 0);
+  };
+
+  return (
+    <div className="relative">
+      <Card className="border-dashed">
+        <CardHeader className="py-2">
+          <div className="flex items-center justify-between">
+            <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
+              <TabsList className="h-8">
+                <TabsTrigger value="write">Escrever</TabsTrigger>
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {tab === "write" && (
+              <div className="flex items-center gap-1">
+                <ToolbarButton title="Título" onClick={() => insert("# ", "", "Título")}>
+                  <Heading1 className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Negrito" onClick={() => insert("**","**","texto")}>
+                  <Bold className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Itálico" onClick={() => insert("*","*","texto")}>
+                  <Italic className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Link" onClick={() => insert("[","](https://)","texto")}>
+                  <LinkIcon className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Lista" onClick={() => insert("- ","","item")}>
+                  <List className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Lista ordenada" onClick={() => insert("1. ","","item")}>
+                  <ListOrdered className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Citação" onClick={() => insert("> ","","citação")}>
+                  <Quote className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Código" onClick={() => insert("`","`","code")}>
+                  <Code className="h-4 w-4"/>
+                </ToolbarButton>
+                <ToolbarButton title="Variáveis (digite /)" onClick={() => setShowVariables(!showVariables)}>
+                  <Code className="h-4 w-4"/>
+                </ToolbarButton>
+              </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {tab === "write" ? (
+            <div className="relative">
+              {/* Overlay visual com pills */}
+              <div className="min-h-[120px] border border-input bg-background px-3 py-2 text-sm ring-offset-background pointer-events-none overflow-auto whitespace-pre-wrap break-words rounded-md absolute inset-0 z-10" style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>
+                {value ? (
+                  <div style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>
+                    {renderTextWithPills(value).map((part, i) => 
+                      typeof part === 'string' ? 
+                        <span key={i} className="whitespace-pre-wrap" style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>{part}</span> : 
+                        part
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground" style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>
+                    {placeholder || "Digite seu markdown aqui... Use / para inserir variáveis"}
+                  </span>
+                )}
+              </div>
+              
+              {/* Textarea para capturar input e mostrar cursor */}
+              <Textarea 
+                ref={ref} 
+                className="min-h-[120px] resize-y relative z-20 bg-transparent text-transparent selection:bg-primary/20" 
+                value={value} 
+                onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
+                placeholder=""
+                style={{
+                  caretColor: 'hsl(var(--foreground))',
+                  color: 'transparent',
+                  border: 'none',
+                  outline: 'none',
+                  boxShadow: 'none',
+                  lineHeight: '1.5rem',
+                  padding: '0.5rem 0.75rem',
+                  fontSize: '0.875rem'
+                }}
+              />
+            </div>
+          ) : (
+            <div className="border rounded-xl p-4 bg-background min-h-[120px]">
+              <SmartPreview 
+                value={value} 
+                sections={sections} 
+                stats={stats} 
+                locale={locale}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Menu Multi-Level de Variáveis */}
+      {showVariables && (
+        <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden">
+          <CardHeader className="py-2 border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {currentPath.length > 0 && (
+                  <Button variant="ghost" size="sm" onClick={goBack}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                )}
+                <div className="text-sm font-medium">
+                  {currentPath.length === 0 ? "Variáveis" : 
+                   currentPath.map((path, i) => (
+                     <span key={i}>
+                       {i > 0 && " > "}
+                       {menuStructure[currentPath[0]]?.label}
+                       {i > 0 && ` > ${getCurrentLevel()[path]?.label || path}`}
+                     </span>
+                   ))
+                  }
+                </div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowVariables(false)}>
+                ✕
+              </Button>
+            </div>
+          </CardHeader>
+          <ScrollArea className="max-h-48">
+            <CardContent className="p-2">
+              <div className="space-y-1">
+                {getFilteredItems().map(([key, item]: [string, any]) => (
+                  <Button
+                    key={key}
+                    variant="ghost"
+                    className="w-full justify-start h-auto p-2 text-left"
+                    onClick={() => handleMenuItemClick(key, item)}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="text-lg">{item.icon}</span>
+                      <div className="flex-1">
+                        <div className="font-medium">{item.label}</div>
+                        {item.value && (
+                          <code className="text-xs bg-muted px-1 rounded mt-1 block">
+                            {item.value}
+                          </code>
+                        )}
+                      </div>
+                      {item.children && <ChevronRight className="h-4 w-4" />}
+                    </div>
+                  </Button>
+                ))}
+                {getFilteredItems().length === 0 && (
+                  <p className="text-xs text-muted-foreground p-2">
+                    Nenhuma variável encontrada.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </ScrollArea>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// =====================
+// Compact Localization Editors
+// =====================
+function CompactTextLocalizationEditor({ value, onChange, label, placeholder, locales = ["pt-BR","en-US"]}:{ value: Localization<string>; onChange:(v:Localization<string>)=>void; label:string; placeholder?:string; locales?:Locale[]; }){
+  const [curr, setCurr] = useState<Locale|"default">("default");
+  const all = allLocalesFrom(value, locales);
+  const update = (k:Locale|"default", v:string) => onChange({ ...value, [k]: v });
+  return (
+    <Card className="border-dashed">
+      <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2">{label}
+        <Select value={String(curr)} onValueChange={(value) => setCurr(value as any)}>
+          <SelectTrigger className="ml-auto w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {all.map((opt)=>(
+              <SelectItem key={String(opt)} value={String(opt)}>{String(opt)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select></CardTitle></CardHeader>
+      <CardContent>
+        <Input value={(value as any)[curr] ?? ""} placeholder={curr==="default"?(placeholder??"Obrigatório"):`${placeholder??"Opcional"} (${curr})`} onChange={(e)=>update(curr,e.target.value)} />
+      </CardContent>
+    </Card>
+  );
+}
+function CompactMarkdownLocalizationEditor({ value, onChange, label, locales=["pt-BR","en-US"], sections=[], stats=[] }:{ 
+  value:Localization<string>; 
+  onChange:(v:Localization<string>)=>void; 
+  label:string; 
+  locales?:Locale[];
+  sections?: Section[];
+  stats?: Stats[];
+}){
+  const [curr, setCurr] = useState<Locale|"default">("default");
+  const all = allLocalesFrom(value, locales); 
+  const update=(k:Locale|"default",v:string)=>onChange({ ...value, [k]: v });
+  
+  return (
+    <Card className="border-dashed">
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          {label}
+          <Select value={String(curr)} onValueChange={(value) => setCurr(value as any)}>
+            <SelectTrigger className="ml-auto w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {all.map((opt)=>(
+                <SelectItem key={String(opt)} value={String(opt)}>{String(opt)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <MarkdownEditor 
+          value={(value as any)[curr] ?? ""} 
+          onChange={(v)=>update(curr,v)} 
+          placeholder={curr==="default"?"Obrigatório":`Opcional (${curr})`}
+          sections={sections}
+          stats={stats}
+          locale={curr === "default" ? 'default' : curr}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+function LabelLocalizationEditor({ value, onChange, label, locales=["pt-BR","en-US"]}:{ value:LabelLocalization; onChange:(v:LabelLocalization)=>void; label:string; locales?:Locale[]; }){
+  return (<CompactTextLocalizationEditor value={value as any} onChange={(v)=>onChange(v as LabelLocalization)} label={label} placeholder="rótulo curto (ex.: Força)" locales={locales}/>);
+}
+
+// =====================
+// MultiSelect de Seções (reusável)
+// =====================
+function MultiSelectSections({ sections, value, onChange, placeholder = "Selecionar seções", includeDefault = false }:{ sections:Section[]; value:number[]|undefined; onChange:(ids:number[])=>void; placeholder?:string; includeDefault?:boolean; }){
+  const [open, setOpen] = useState(false);
+  const selected = new Set(value ?? []);
+  
+  const toggle = (id: number) => {
+    const next = new Set(selected);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    onChange(Array.from(next));
+  };
+  
+  const labelFor = (id: number) => {
+    if (id === -1) return "Padrão";
+    return sections.find((s) => s.id === id)?.name?.default ?? String(id);
+  };
+  const selectedLabels = Array.from(selected).map(labelFor);
+  
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+          <div className="flex flex-wrap gap-1 items-center">
+            {selected.size === 0 ? (
+              <span className="text-muted-foreground">{placeholder}</span>
+            ) : (
+              <>
+                {selectedLabels.slice(0, 3).map((label, i) => (
+                  <Badge key={i} variant="secondary" className="mr-1">
+                    {label}
+                  </Badge>
+                ))}
+                {selected.size > 3 && (
+                  <Badge variant="outline">+{selected.size - 3}</Badge>
+                )}
+              </>
+            )}
+          </div>
+          <ChevronDown className="h-4 w-4 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[300px]" align="start">
+        <div className="p-2">
+          <div className="relative">
+            <Input 
+              placeholder="Buscar seção..." 
+              className="mb-2"
+            />
+          </div>
+          <ScrollArea className="max-h-64">
+            <div className="space-y-1">
+              {includeDefault && (
+                <div
+                  key={-1}
+                  className="flex items-center space-x-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer border-b"
+                  onClick={() => toggle(-1)}
+                >
+                  <Checkbox 
+                    checked={selected.has(-1)} 
+                    onCheckedChange={() => toggle(-1)}
+                  />
+                  <span className="flex-1 font-medium">
+                    🏠 Padrão
+                  </span>
+                </div>
+              )}
+              {sections.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-2">
+                  Nenhuma seção encontrada.
+                </div>
+              ) : (
+                sections.map((section) => (
+                  <div
+                    key={section.id}
+                    className="flex items-center space-x-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                    onClick={() => toggle(section.id)}
+                  >
+                    <Checkbox 
+                      checked={selected.has(section.id)} 
+                      onCheckedChange={() => toggle(section.id)}
+                    />
+                    <span className="flex-1">
+                      {section.emoji && `${section.emoji} `}
+                      {section.name?.default ?? `Seção ${section.id}`}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// =====================
+// EmojiPicker (usando biblioteca externa)
+// =====================
+function CustomEmojiPicker({ value, onChange, placeholder = "ex.: 🗡️"}:{ value?:string; onChange:(v:string)=>void; placeholder?:string; }){
+  const [open, setOpen] = useState(false);
+  
+  const handleEmojiClick = (emojiData: any) => {
+    onChange(emojiData.emoji);
+    setOpen(false);
+    toast.success("Emoji selecionado!");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="justify-start font-normal">
+          {value || <span className="text-muted-foreground">{placeholder}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <EmojiPickerReact 
+          onEmojiClick={handleEmojiClick}
+          autoFocusSearch={false}
+          width={300}
+          height={400}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// =====================
+// Dice, Replacement Editors
+// =====================
+function DiceEditor({ value, onChange }:{ value: Dice[]|undefined; onChange:(v?:Dice[])=>void }){
+  const dices = value ?? [];
+  const add = () => onChange([...(value ?? []), { expression: "1d20" }]);
+  const remove = (i:number) => onChange(dices.filter((_,idx)=>idx!==i));
+  const set = (i:number, patch:Partial<Dice>) => onChange(dices.map((d,idx)=>(idx===i?{...d,...patch}:d)));
+  return (
+    <Card>
+      <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2">Dados<Button size="sm" variant="secondary" onClick={add}><Plus className="h-4 w-4"/> Adicionar dado</Button></CardTitle></CardHeader>
+      <CardContent className="grid gap-3">
+        {dices.length===0 && <p className="text-sm text-muted-foreground">Sem dados vinculados.</p>}
+        {dices.map((d,i)=>(
+          <div key={i} className="grid gap-2 border rounded-xl p-3">
+            <div className="flex gap-2 items-center"><Label className="min-w-20">Expressão</Label><Input value={d.expression} onChange={(e)=>set(i,{expression:e.target.value})}/><Button size="icon" variant="ghost" onClick={()=>remove(i)}><Trash2 className="h-4 w-4"/></Button></div>
+            <div className="grid md:grid-cols-3 gap-2">
+              <div className="flex gap-2 items-center"><Label className="min-w-20">v1</Label><Input value={d.condition?.value1 ?? ""} onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), value1:e.target.value}})} /></div>
+              <div className="flex gap-2 items-center"><Label className="min-w-20">op</Label><Input value={d.condition?.operator ?? "=="} onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), operator:e.target.value as any}})} /></div>
+              <div className="flex gap-2 items-center"><Label className="min-w-20">v2</Label><Input value={d.condition?.value2 ?? ""} onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), value2:e.target.value}})} /></div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+function ReplacementEditor({ value, onChange }:{ value:Replacement[]|undefined; onChange:(v?:Replacement[])=>void }){
+  const reps = value ?? [];
+  const add = () => onChange([...(value ?? []), { key: 0, options: [] }]);
+  const remove = (i:number) => onChange(reps.filter((_,idx)=>idx!==i));
+  const set = (i:number, patch:Partial<Replacement>) => onChange(reps.map((d,idx)=>(idx===i?{...d,...patch}:d)));
+  return (
+    <Card>
+      <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2">Replacements (substituições)<Button size="sm" variant="secondary" onClick={add}><Plus className="h-4 w-4"/> Adicionar</Button></CardTitle></CardHeader>
+      <CardContent className="grid gap-3">
+        {reps.length===0 && <p className="text-sm text-muted-foreground">Sem replacements.</p>}
+        {reps.map((r,i)=>(
+          <div key={i} className="grid gap-2 border rounded-xl p-3">
+            <div className="flex gap-2 items-center"><Label className="min-w-32">key</Label><Input type="number" value={r.key} onChange={(e)=>set(i,{key:Number(e.target.value)})}/><Button size="icon" variant="ghost" onClick={()=>remove(i)}><Trash2 className="h-4 w-4"/></Button></div>
+            <div className="flex gap-2 items-center"><Label className="min-w-32">options (lista de números, sep. por vírgula)</Label><Input value={(r.options ?? []).join(",")} onChange={(e)=>set(i,{options:e.target.value.split(",").map((n)=>Number(n.trim())).filter((n)=>!Number.isNaN(n))})} /></div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// =====================
+// Stat Editors
+// =====================
+function BaseStatFields({ stat, onPatch, sections }:{ stat:BaseStat; onPatch:(p:Partial<BaseStat>)=>void; sections:Section[] }){
+  return (
+    <div className="grid gap-3">
+      <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid gap-2"><Label>Emoji</Label><CustomEmojiPicker value={stat.emoji ?? ""} onChange={(v)=>onPatch({ emoji: v })} /></div>
+        <div className="grid gap-2 md:col-span-2"><Label>Páginas editáveis (seções)</Label>
+          <MultiSelectSections sections={sections} value={stat.edit_page} onChange={(ids)=>onPatch({ edit_page: ids })} placeholder="Selecione as seções onde este stat é editável" />
+        </div>
+      </div>
+      <LabelLocalizationEditor label="Nome (localizado)" value={stat.name} onChange={(v)=>onPatch({ name: v } as any)} />
+    </div>
+  );
+}
+function StatNumericEditor({ value, onChange, sections }:{ value:StatsNumeric; onChange:(v:StatsNumeric)=>void; sections:Section[] }){ 
+  const [showLimits, setShowLimits] = useState<boolean>(
+    value.min !== undefined || value.max !== undefined
+  );
+  
+  const patch=(p:Partial<StatsNumeric>)=>onChange({ ...value, ...p }); 
+  
+  const handleLimitsToggle = (enabled: boolean) => {
+    setShowLimits(enabled);
+    if (!enabled) {
+      // Remove min/max quando desabilitado
+      const { min, max, ...rest } = value;
+      onChange(rest as StatsNumeric);
+    } else {
+      // Define valores padrão quando habilitado
+      patch({ min: value.min ?? 0, max: value.max ?? 10 });
+    }
+  };
+  
+  return (
+    <div className="grid gap-4">
+      <BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+      
+      <div className="flex items-center space-x-2">
+        <Switch 
+          id="limits-toggle" 
+          checked={showLimits} 
+          onCheckedChange={handleLimitsToggle}
+        />
+        <Label htmlFor="limits-toggle">Definir limites (min/max)</Label>
+      </div>
+      
+      {showLimits && (
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid gap-2">
+            <Label>Mínimo</Label>
+            <Input 
+              type="number" 
+              value={value.min ?? 0} 
+              onChange={(e)=>patch({min:Number(e.target.value)})}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>Máximo</Label>
+            <Input 
+              type="number" 
+              value={value.max ?? 10} 
+              onChange={(e)=>patch({max:Number(e.target.value)})}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+} 
+function OptionEditor({ value, onChange }:{ value:StatsEnumOption; onChange:(v:StatsEnumOption)=>void }){
+  const patch=(p:Partial<StatsEnumOption>)=>onChange({ ...value, ...p });
+  return (
+    <div className="grid gap-3 border rounded-xl p-3">
+      <div className="grid md:grid-cols-3 gap-2">
+        <div className="grid gap-2">
+          <Label>Valor</Label>
+          <Input 
+            type="number" 
+            value={value.value} 
+            onChange={(e)=>patch({ value:Number(e.target.value) })}
+          />
+        </div>
+        <div className="grid gap-2">
+          <Label>Emoji</Label>
+          <CustomEmojiPicker 
+            value={value.emoji ?? ""} 
+            onChange={(v)=>patch({ emoji: v })}
+          />
+        </div>
+      </div>
+      <LabelLocalizationEditor 
+        label="Nome (localizado)" 
+        value={value.name} 
+        onChange={(v)=>patch({ name: v } as any)} 
+      />
+    </div>
+  );
+}
+function StatEnumEditor({ value, onChange, sections, allStats }:{ value:StatsEnum; onChange:(v:StatsEnum)=>void; sections:Section[]; allStats:Stats[] }){
+  const [expandedOptions, setExpandedOptions] = useState<Set<number>>(new Set([0])); // Primeira opção expandida por padrão
+  
+  const patch=(p:Partial<StatsEnum>)=>onChange({ ...value, ...p });
+  const isNumberCompat = typeof value.options === "number";
+  const opts = (Array.isArray(value.options) ? value.options : []) as StatsEnumOption[];
+  
+  // Verificar valores duplicados
+  const duplicateValues = opts.reduce((acc, option, index) => {
+    const duplicateIndex = opts.findIndex((o, i) => i !== index && o.value === option.value);
+    if (duplicateIndex !== -1) {
+      acc.add(option.value);
+    }
+    return acc;
+  }, new Set<number>());
+  
+  const addOption = () => {
+    if (opts.length >= 25) {
+      toast.error("Máximo de 25 opções permitidas");
+      return;
+    }
+    const newIndex = opts.length;
+    patch({ options: [...opts, { value: (opts.at(-1)?.value ?? 0) + 1, name: emptyLabelLoc() }] });
+    // Expandir a nova opção automaticamente
+    setExpandedOptions(prev => new Set([...prev, newIndex]));
+  };
+  
+  const setOption=(i:number,v:StatsEnumOption)=>patch({ options: opts.map((o,idx)=>(idx===i?v:o)) });
+  const removeOption=(i:number)=>{
+    patch({ options: opts.filter((_,idx)=>idx!==i) });
+    // Remover do conjunto de expandidos
+    setExpandedOptions(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(i);
+      // Reajustar índices dos itens expandidos após a remoção
+      const adjustedSet = new Set<number>();
+      newSet.forEach(index => {
+        if (index > i) {
+          adjustedSet.add(index - 1);
+        } else {
+          adjustedSet.add(index);
+        }
+      });
+      return adjustedSet;
+    });
+  };
+  
+  const toggleExpanded = (index: number) => {
+    setExpandedOptions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+  
+  // Filtrar stats que são enum e têm lista de opções (não ID)
+  const availableEnumStats = allStats.filter(stat => 
+    stat.type === "enum" && 
+    Array.isArray(stat.options) && 
+    stat.options.length > 0 &&
+    stat.id !== value.id // Não incluir o próprio stat
+  ) as StatsEnum[];
+  
+  return (
+    <div className="grid gap-4">
+      <BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+      <div className="flex items-center gap-2">
+        <Switch 
+          checked={!isNumberCompat} 
+          onCheckedChange={(ch)=>patch({ options: ch ? [] : 0 })}
+        />
+        <span className="text-sm">Usar lista de opções próprias (desligado = referenciar outro enum)</span>
+      </div>
+      
+      {isNumberCompat ? (
+        <div className="grid gap-2">
+          <Label>Referenciar opções de outro Enum</Label>
+          {availableEnumStats.length === 0 ? (
+            <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md text-center">
+              📭 Não existem outros enums com opções disponíveis.
+              <br />
+              <span className="text-xs">Crie outros enums com lista de opções para poder referenciá-los aqui.</span>
+            </div>
+          ) : (
+            <>
+              <Select 
+                value={typeof value.options === "number" && value.options > 0 ? String(value.options) : ""} 
+                onValueChange={(val) => {
+                  const numVal = parseInt(val);
+                  if (!isNaN(numVal) && numVal > 0) {
+                    patch({ options: numVal });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um enum com opções definidas" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableEnumStats.map((stat) => (
+                    <SelectItem key={stat.id} value={String(stat.id)}>
+                      {stat.emoji && `${stat.emoji} `}
+                      {stat.name?.default || `Stat ${stat.id}`}
+                      {Array.isArray(stat.options) && ` (${stat.options.length} opções)`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {typeof value.options === "number" && value.options > 0 && (
+                <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                  <strong>Referenciando:</strong> {(() => {
+                    const referencedStat = availableEnumStats.find(s => s.id === value.options);
+                    if (referencedStat && Array.isArray(referencedStat.options)) {
+                      return `${referencedStat.name?.default || `Stat ${referencedStat.id}`} com ${referencedStat.options.length} opções`;
+                    }
+                    return "Enum não encontrado";
+                  })()}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <Label>Opções Próprias</Label>
+              <p className="text-xs text-muted-foreground">
+                {opts.length}/25 opções
+                {duplicateValues.size > 0 && (
+                  <span className="text-red-500 ml-2">
+                    ⚠️ Valores duplicados: {Array.from(duplicateValues).join(', ')}
+                  </span>
+                )}
+              </p>
+            </div>
+            <Button 
+              size="sm" 
+              variant="secondary" 
+              onClick={addOption}
+              disabled={opts.length >= 25}
+            >
+              <Plus className="h-4 w-4"/> Adicionar opção
+            </Button>
+          </div>
+          {opts.length===0 && <p className="text-sm text-muted-foreground">Sem opções.</p>}
+          <div className="grid gap-3">{opts.map((o,i)=>(
+            <Collapsible key={i} open={expandedOptions.has(i)} onOpenChange={() => toggleExpanded(i)}>
+              <Card className={duplicateValues.has(o.value) ? "border-red-200 border-2" : ""}>
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="py-3 cursor-pointer hover:bg-muted/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{o.emoji || "📋"}</span>
+                        <div>
+                          <div className="font-medium text-sm">
+                            {o.name?.default || `Opção ${o.value}`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Valor: {o.value}
+                            {duplicateValues.has(o.value) && (
+                              <span className="text-red-500 ml-2">⚠️ Duplicado</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeOption(i);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4"/>
+                        </Button>
+                        {expandedOptions.has(i) ? 
+                          <ChevronUp className="h-4 w-4" /> : 
+                          <ChevronDown className="h-4 w-4" />
+                        }
+                      </div>
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0">
+                    <OptionEditor value={o} onChange={(v)=>setOption(i,v)} />
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          ))}</div>
+        </div>
+      )}
+      
+      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
+      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })}/>
+    </div>
+  );
+}
+function StatBooleanEditor({ value, onChange, sections }:{ value:StatsBoolean; onChange:(v:StatsBoolean)=>void; sections:Section[] }){ const patch=(p:Partial<StatsBoolean>)=>onChange({ ...value, ...p }); return (<div className="grid gap-4"><BaseStatFields stat={value} onPatch={patch} sections={sections}/></div>); }
+function StatStringEditor({ value, onChange, sections }:{ value:StatsString; onChange:(v:StatsString)=>void; sections:Section[] }){ 
+  const [showLimits, setShowLimits] = useState<boolean>(
+    value.minLength !== undefined || value.maxLength !== undefined
+  );
+  
+  const patch=(p:Partial<StatsString>)=>onChange({ ...value, ...p }); 
+  
+  const handleLimitsToggle = (enabled: boolean) => {
+    setShowLimits(enabled);
+    if (!enabled) {
+      // Remove minLength/maxLength quando desabilitado
+      const { minLength, maxLength, ...rest } = value;
+      onChange(rest as StatsString);
+    } else {
+      // Define valores padrão quando habilitado
+      patch({ minLength: value.minLength ?? 0, maxLength: value.maxLength ?? 100 });
+    }
+  };
+  
+  return (
+    <div className="grid gap-4">
+      <BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+      
+      <div className="flex items-center space-x-2">
+        <Switch 
+          id="string-limits-toggle" 
+          checked={showLimits} 
+          onCheckedChange={handleLimitsToggle}
+        />
+        <Label htmlFor="string-limits-toggle">Definir limites de caracteres</Label>
+      </div>
+      
+      {showLimits && (
+        <div className="grid md:grid-cols-2 gap-3">
+          <div className="grid gap-2">
+            <Label>Mín. caracteres</Label>
+            <Input 
+              type="number" 
+              value={value.minLength ?? 0} 
+              onChange={(e)=>patch({minLength:Number(e.target.value)})}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>Máx. caracteres</Label>
+            <Input 
+              type="number" 
+              value={value.maxLength ?? 100} 
+              onChange={(e)=>patch({maxLength:Number(e.target.value)})}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+function StatCalculatedEditor({ value, onChange, sections }:{ value:StatsCalculated; onChange:(v:StatsCalculated)=>void; sections:Section[] }){ const patch=(p:Partial<StatsCalculated>)=>onChange({ ...value, ...p }); return (
+  <div className="grid gap-4"><BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+    <div className="grid gap-2"><Label>Fórmula (string)</Label><Input value={value.formula} onChange={(e)=>patch({ formula:e.target.value })} placeholder="ex.: STR + DEX / 2"/></div>
+    <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
+    <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })}/>
+  </div>
+);}
+function StatViewEditor({ value, onChange, sections }:{ value:StatsExtraDice; onChange:(v:StatsExtraDice)=>void; sections:Section[] }){ const patch=(p:Partial<StatsExtraDice>)=>onChange({ ...value, ...p }); return (
+  <div className="grid gap-4"><BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+    <div className="grid gap-2"><Label>Componente (nome)</Label><Input value={value.component} onChange={(e)=>patch({ component:e.target.value })} placeholder="ex.: ExtraDicePanel"/></div>
+    <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
+  </div>
+);}
+function PolymorphicStatEditor({ value, onChange, sections, allStats }:{ value:Stats; onChange:(v:Stats)=>void; sections:Section[]; allStats:Stats[] }){
+  return (
+    <div className="grid gap-4">
+      {value.type==="numeric" && <StatNumericEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="enum" && <StatEnumEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
+      {value.type==="boolean" && <StatBooleanEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="string" && <StatStringEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="calculated" && <StatCalculatedEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="view" && <StatViewEditor value={value} onChange={onChange as any} sections={sections}/>} 
+    </div>
+  );
+}
+
+// =====================
+// Section Editor (agora usa MultiSelectSections para view_pages)
+// =====================
+function SectionEditor({ value, onChange, sections, stats = [] }:{ value:Section; onChange:(v:Section)=>void; sections:Section[]; stats?: Stats[]; }){
+  const [isOpen, setIsOpen] = useState(false);
+  const patch=(p:Partial<Section>)=>onChange({ ...value, ...p });
+  // Você pode optar por filtrar a própria seção da lista se não quiser permitir self-reference:
+  const sectionChoices = sections; // .filter((s)=>s.id!==value.id)
+  
+  return (
+    <Card>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger className="w-full text-left">
+          <CardHeader className="py-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">
+              {value.name?.default || `Seção ${value.id}`}
+            </CardTitle>
+            <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="grid gap-4">
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="flex items-end gap-2"><Switch checked={value.quick_edit_btn} onCheckedChange={(v)=>patch({ quick_edit_btn:v })}/><Label>Botão de edição rápida</Label></div>
+              <div className="grid gap-2">
+                <Label>Emoji</Label>
+                <CustomEmojiPicker value={value.emoji ?? ""} onChange={(v)=>patch({ emoji: v })}/>
+              </div>
+              <div className="grid gap-2">
+                <Label>Páginas exibidas (seções)</Label>
+                <MultiSelectSections
+                  sections={sectionChoices}
+                  value={value.view_pages}
+                  onChange={(ids)=>patch({ view_pages: ids })}
+                  placeholder="Selecione em quais páginas (seções) essa seção também aparece"
+                  includeDefault={true}
+                />
+              </div>
+            </div>
+            <LabelLocalizationEditor label="Nome (localizado)" value={value.name} onChange={(v)=>patch({ name:v } as any)} />
+            <Card>
+              <CardHeader className="py-3"><CardTitle className="text-sm">Preview</CardTitle></CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="grid md:grid-cols-3 gap-3"><div className="grid gap-2"><Label>Tipo</Label>
+                  <Select value={value.preview.type} onValueChange={(val) => patch({ preview:{ ...value.preview, type:val as any } })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="string">string</SelectItem>
+                      <SelectItem value="img">img</SelectItem>
+                    </SelectContent>
+                  </Select></div></div>
+                {value.preview.type==="string" ? (
+                  <CompactMarkdownLocalizationEditor 
+                    value={value.preview.content} 
+                    onChange={(v)=>patch({ preview:{ ...value.preview, content:v } })} 
+                    label="Conteúdo (Markdown)" 
+                    sections={sections}
+                    stats={stats}
+                  />
+                ) : (
+                  <CompactTextLocalizationEditor value={value.preview.content} onChange={(v)=>patch({ preview:{ ...value.preview, content:v } })} label="URL da imagem" placeholder="https://..." />
+                )}
+              </CardContent>
+            </Card>
+            <div className="text-xs text-muted-foreground">Dica: você pode referenciar variáveis como <code>&lt;stat:ID:name&gt;</code> no Markdown.</div>
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
+  );
+}
+
+// =====================
+// Config Editor
+// =====================
+function ConfigEditor({ value, onChange }:{ value:RPGSystem["config"]; onChange:(v:RPGSystem["config"])=>void }){
+  const patch=(p:Partial<RPGSystem["config"]>)=>onChange({ ...value, ...p });
+  return (
+    <Card>
+      <CardHeader><CardTitle>Configuração do Sistema</CardTitle></CardHeader>
+      <CardContent className="grid gap-4">
+        <LabelLocalizationEditor label="Nome (localizado)" value={value.name} onChange={(v)=>patch({ name:v } as any)} />
+        <CompactTextLocalizationEditor label="Descrição" value={value.description} onChange={(v)=>patch({ description:v })} placeholder="Breve resumo do sistema" />
+      </CardContent>
+    </Card>
+  );
+}
+
+// =====================
+// Validators
+// =====================
+function validate(system:RPGSystem): string[] {
+  const errs:string[] = [];
+  if (!system.config?.id && system.config?.id !== 0) errs.push("config.id é obrigatório");
+  if (!system.config?.name?.default) errs.push("config.name.default é obrigatório");
+  if (!Array.isArray(system.stats)) errs.push("stats deve ser um array");
+  if (!Array.isArray(system.sections)) errs.push("sections deve ser um array");
+
+  const ids = new Set<number>();
+  system.stats.forEach((s, idx) => {
+    if (ids.has(s.id)) errs.push(`stats[${idx}] id duplicado: ${s.id}`);
+    ids.add(s.id);
+    if (!s.name?.default) errs.push(`stats[${idx}].name.default é obrigatório`);
+    if (s.type === "numeric") {
+      const n = s as StatsNumeric;
+      if (typeof n.min === "number" && typeof n.max === "number" && n.min! > n.max!) errs.push(`stats[${idx}] min > max`);
+    }
+    if (s.type === "enum") {
+      const e = s as StatsEnum;
+      if (Array.isArray(e.options)) {
+        if (e.options.length > 25) errs.push(`stats[${idx}] excede o limite de 25 opções (${e.options.length})`);
+        const seen = new Set<number>();
+        e.options.forEach((o, j) => {
+          if (seen.has(o.value)) errs.push(`stats[${idx}].options[${j}].value duplicado: ${o.value}`);
+          seen.add(o.value);
+          if (!o.name?.default) errs.push(`stats[${idx}].options[${j}].name.default é obrigatório`);
+        });
+      }
+    }
+    if (s.type === "calculated") {
+      const c = s as StatsCalculated; if (!c.formula) errs.push(`stats[${idx}].formula é obrigatório`);
+    }
+  });
+
+  const secIds = new Set<number>();
+  system.sections.forEach((sec, i) => {
+    if (secIds.has(sec.id)) errs.push(`sections[${i}] id duplicado: ${sec.id}`);
+    secIds.add(sec.id);
+    if (!sec.name?.default) errs.push(`sections[${i}].name.default é obrigatório`);
+    if (!sec.preview?.type) errs.push(`sections[${i}].preview.type é obrigatório`);
+  });
+  return errs;
+}
+
+// =====================
+// Main Component
+// =====================
+export default function RPGSystemBuilder(){
+  const [system, setSystem] = useState<RPGSystem>({
+    config: { id: 1, name: { default: "Meu Sistema" }, description: { default: "Descrição breve do sistema." } },
+    stats: [
+      { id: 1, type: "numeric", name: { default: "Força" }, min: 0, max: 10 },
+      { id: 2, type: "boolean", name: { default: "Treinado em Furtividade" } },
+      { id: 3, type: "enum", name: { default: "Classe" }, options: [] },
+    ],
+    sections: [
+      { id: 1, name: { default: "Resumo" }, quick_edit_btn: true, preview: { type: "string", content: { default: "Um **pequeno** resumo do personagem." } }, view_pages: [1] },
+      { id: 2, name: { default: "Atributos" }, quick_edit_btn: true, preview: { type: "string", content: { default: "Lista de atributos..." } }, view_pages: [1,2] },
+    ],
+  });
+  const [selectedTab, setSelectedTab] = useState<string>("config");
+  const errors = useMemo(()=>validate(system),[system]);
+
+  const addStat=(kind:Stats["type"])=>{
+    const id = nextId(system.stats); const base = { id, name: { default: "Novo Stat" } } as BaseStat; let stat:Stats;
+    switch(kind){
+      case "numeric": stat={...base, type:"numeric", min:0, max:10} as StatsNumeric; break;
+      case "enum": stat={...base, type:"enum", options:[]} as StatsEnum; break;
+      case "boolean": stat={...base, type:"boolean"} as StatsBoolean; break;
+      case "string": stat={...base, type:"string", minLength:0, maxLength:200} as StatsString; break;
+      case "calculated": stat={...base, type:"calculated", formula:""} as StatsCalculated; break;
+      case "view": stat={...base, type:"view", component:"ExtraDicePanel"} as StatsExtraDice; break;
+    }
+    setSystem({ ...system, stats:[...system.stats, stat] }); setSelectedTab("stats");
+  };
+  const updateStat=(index:number, v:Stats)=>{ const copy=clone(system); copy.stats[index]=v; setSystem(copy); };
+  const removeStat=(index:number)=>{ const copy=clone(system); copy.stats.splice(index,1); setSystem(copy); };
+  const moveStat=(index:number, dir:-1|1)=>{ const copy=clone(system); const j=index+dir; if(j<0||j>=copy.stats.length) return; const tmp=copy.stats[index]; copy.stats[index]=copy.stats[j]; copy.stats[j]=tmp; setSystem(copy); };
+
+  const addSection=()=>{ setSystem({ ...system, sections:[ ...system.sections, { id: nextId(system.sections), name:{ default:"Nova Seção" }, quick_edit_btn:false, preview:{ type:"string", content:{ default:"" } }, view_pages:[] } ] }); setSelectedTab("sections"); };
+  const updateSection=(index:number,v:Section)=>{ const copy=clone(system); copy.sections[index]=v; setSystem(copy); };
+  const removeSection=(index:number)=>{ const copy=clone(system); copy.sections.splice(index,1); setSystem(copy); };
+
+  const exportJson=()=>{ const text=JSON.stringify(system, null, 2); download(`rpg-system-${system.config.name.default || system.config.id}.json`, text); };
+  const fileRef = useRef<HTMLInputElement|null>(null);
+  const importJson=(file:File)=>{ const reader=new FileReader(); reader.onload=()=>{ try{ const parsed=JSON.parse(String(reader.result)); setSystem(parsed); toast.success("Importado com sucesso!"); } catch{ toast.error("Falha ao importar JSON"); } }; reader.readAsText(file); };
+  const copyJson=async()=>{ try{ await navigator.clipboard.writeText(JSON.stringify(system,null,2)); toast.success("JSON copiado para a área de transferência"); } catch{ toast.error("Não foi possível copiar o JSON"); } };
+
+  return (
+    <div className="p-6 max-w-[1200px] mx-auto grid gap-6">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-2xl font-bold">RPG System Builder</h1><p className="text-sm text-muted-foreground">Ferramenta visual para criar sistemas compatíveis com seu schema.</p></div>
+        <div className="flex gap-2">
+          <Button onClick={exportJson}><Download className="h-4 w-4 mr-2"/> Exportar JSON</Button>
+          <Button variant="outline" onClick={copyJson}><Copy className="h-4 w-4 mr-2"/> Copiar JSON</Button>
+          <Button variant="outline" onClick={()=>fileRef.current?.click()}><Upload className="h-4 w-4 mr-2"/> Importar JSON</Button>
+          <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={(e)=> e.target.files && importJson(e.target.files[0])}/>
+        </div>
+      </div>
+
+      {errors.length>0 && (
+        <Card className="border-red-500/40"><CardHeader className="py-3"><CardTitle className="text-sm">Validação</CardTitle></CardHeader>
+          <CardContent className="grid gap-1">{errors.map((er,i)=>(<div key={i} className="text-sm text-red-500">• {er}</div>))}</CardContent>
+        </Card>
+      )}
+
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList>
+          <TabsTrigger value="config">Config</TabsTrigger>
+          <TabsTrigger value="stats">Stats</TabsTrigger>
+          <TabsTrigger value="sections">Seções</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="config" className="mt-4"><ConfigEditor value={system.config} onChange={(v)=>setSystem({ ...system, config:v })} /></TabsContent>
+
+        <TabsContent value="stats" className="mt-4">
+          <div className="flex flex-wrap gap-2 mb-3">
+            <Button size="sm" variant="secondary" onClick={()=>addStat("numeric")}>+ Numeric</Button>
+            <Button size="sm" variant="secondary" onClick={()=>addStat("enum")}>+ Enum</Button>
+            <Button size="sm" variant="secondary" onClick={()=>addStat("boolean")}>+ Boolean</Button>
+            <Button size="sm" variant="secondary" onClick={()=>addStat("string")}>+ String</Button>
+            <Button size="sm" variant="secondary" onClick={()=>addStat("calculated")}>+ Calculated</Button>
+            <Button size="sm" variant="secondary" onClick={()=>addStat("view")}>+ View</Button>
+          </div>
+          <div className="grid gap-4">
+            {system.stats.map((st,i)=>(
+              <Card key={i} className="relative">
+                <Collapsible defaultOpen={false}>
+                  <CollapsibleTrigger className="w-full text-left">
+                    <CardHeader className="py-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Badge variant="secondary">{st.type}</Badge>
+                          <span>{st.name?.default || `Stat ${i+1}`}</span>
+                          <ChevronRight className="h-4 w-4 transition-transform duration-200 ui-state-open:rotate-90" />
+                        </CardTitle>
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button size="icon" variant="ghost" onClick={()=>moveStat(i,-1)}><ChevronUp className="h-4 w-4"/></Button>
+                          <Button size="icon" variant="ghost" onClick={()=>moveStat(i,+1)}><ChevronDown className="h-4 w-4"/></Button>
+                          <Button size="icon" variant="ghost" onClick={()=>removeStat(i)}><Trash2 className="h-4 w-4"/></Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent><PolymorphicStatEditor value={st} onChange={(v)=>updateStat(i,v)} sections={system.sections} allStats={system.stats}/></CardContent>
+                  </CollapsibleContent>
+                </Collapsible>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="sections" className="mt-4">
+          <div className="mb-3"><Button size="sm" variant="secondary" onClick={addSection}>+ Adicionar Seção</Button></div>
+          <div className="grid gap-4">
+            {system.sections.map((sec,i)=>(
+              <Card key={i}><CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2"><Badge variant="secondary">Seção</Badge><span>{sec.name?.default || `Seção ${i+1}`}</span></CardTitle>
+                  <div className="flex items-center gap-1"><Button size="icon" variant="ghost" onClick={()=>removeSection(i)}><Trash2 className="h-4 w-4"/></Button></div>
+                </div>
+              </CardHeader>
+              <CardContent><SectionEditor value={sec} onChange={(v)=>updateSection(i,v)} sections={system.sections} stats={system.stats} /></CardContent></Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="preview" className="mt-4">
+          <Card><CardHeader className="py-3"><CardTitle className="text-sm">JSON</CardTitle></CardHeader>
+            <CardContent><pre className="text-xs overflow-auto bg-muted p-3 rounded-xl max-h-[60vh]">{JSON.stringify(system, null, 2)}</pre></CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <div className="text-xs text-muted-foreground text-center py-4">Feito com ❤️ para construir schemas que você pode salvar e usar no seu bot.</div>
+    </div>
+  );
+}
