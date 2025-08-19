@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import EmojiPickerReact from "emoji-picker-react";
+import { evaluate } from "mathjs";
 
 // =====================
 // Types
@@ -61,9 +62,8 @@ interface StatsBoolean extends BaseStat { type: "boolean"; }
 interface StatsString extends BaseStat { type: "string"; maxLength?: number; minLength?: number; }
 interface StatsCalculated extends BaseStat { type: "calculated"; formula: string; dices?: Dice[]; replacements?: Replacement[]; }
 interface Replacement { key: number; options: number[]; }
-interface StatsExtraDice extends BaseStat { type: "view"; component: string; dices?: Dice[]; }
 
-export type Stats = StatsNumeric | StatsEnum | StatsBoolean | StatsString | StatsCalculated | StatsExtraDice;
+export type Stats = StatsNumeric | StatsEnum | StatsBoolean | StatsString | StatsCalculated;
 
 export interface RPGSystem {
   config: { id: number; name: LabelLocalization; description: Localization<string>; };
@@ -99,6 +99,57 @@ function allLocalesFrom(value: Localization<string>, base: Locale[]): (Locale | 
   const keys = Object.keys(value || {}) as (Locale | "default")[];
   const set = new Set<Locale | "default">(["default", ...base, ...keys.filter((k) => k !== "default")]);
   return Array.from(set);
+}
+
+// Função para detectar dependências recursivas entre stats calculated
+function findStatDependencies(formula: string): number[] {
+  const regex = /<stat:(\d+):value>/g;
+  const dependencies: number[] = [];
+  let match;
+  
+  while ((match = regex.exec(formula)) !== null) {
+    const statId = parseInt(match[1]);
+    if (!dependencies.includes(statId)) {
+      dependencies.push(statId);
+    }
+  }
+  
+  return dependencies;
+}
+
+function hasCircularDependency(
+  currentStatId: number, 
+  formula: string, 
+  allStats: Stats[]
+): boolean {
+  const visited = new Set<number>();
+  
+  function checkRecursive(statId: number, currentFormula: string): boolean {
+    if (visited.has(statId)) {
+      return true; // Ciclo detectado
+    }
+    
+    visited.add(statId);
+    const dependencies = findStatDependencies(currentFormula);
+    
+    for (const depId of dependencies) {
+      if (depId === currentStatId) {
+        return true; // Referência circular direta
+      }
+      
+      const depStat = allStats.find(s => s.id === depId);
+      if (depStat && depStat.type === 'calculated') {
+        if (checkRecursive(depId, depStat.formula)) {
+          return true;
+        }
+      }
+    }
+    
+    visited.delete(statId);
+    return false;
+  }
+  
+  return checkRecursive(currentStatId, formula);
 }
 
 // =====================
@@ -147,8 +198,6 @@ const SmartPreview = ({ value, sections = [], stats = [], locale = 'default' }: 
               return 'enum';
             case 'calculated':
               return '[calculado]';
-            case 'view':
-              return '[view]';
             default:
               return 'valor';
           }
@@ -172,9 +221,56 @@ const SmartPreview = ({ value, sections = [], stats = [], locale = 'default' }: 
     return `[tipo ${type} desconhecido]`;
   };
 
+  // Função para avaliar expressões matemáticas
+  const evaluateMathExpression = (expression: string): string => {
+    try {
+      // Substituir variáveis na expressão por seus valores numéricos
+      const processedExpression = expression.replace(/<(stat):(\d+):(value)>/g, (_, __, id) => {
+        const numId = parseInt(id);
+        const stat = stats.find(s => s.id === numId);
+        
+        if (!stat) return '0';
+        
+        // Só incluir stats que podem ter valores numéricos
+        switch (stat.type) {
+          case 'numeric':
+            return String(stat.min || 1);
+          case 'boolean':
+            return '0'; // false = 0, true = 1
+          case 'enum':
+            if (Array.isArray(stat.options) && stat.options.length > 0) {
+              return String(stat.options[0].value);
+            } else if (typeof stat.options === 'number' && stat.options > 0) {
+              const referencedStat = stats.find(s => s.id === stat.options) as StatsEnum | undefined;
+              if (referencedStat && Array.isArray(referencedStat.options) && referencedStat.options.length > 0) {
+                return String(referencedStat.options[0].value);
+              }
+            }
+            return '1';
+          case 'calculated':
+            return '0'; // Valor placeholder para calculados
+          default:
+            return '0';
+        }
+      });
+
+      // Avaliar a expressão usando math.js
+      const result = evaluate(processedExpression);
+      // Garantir que o resultado seja sempre uma string
+      return typeof result === 'object' ? JSON.stringify(result) : String(result);
+    } catch (error) {
+      return `[Erro: ${expression}]`;
+    }
+  };
+
   // Processar variáveis para valores reais
-  const processedValue = value.replace(/<(stat|section):(\d+):(name|value|emoji)>/g, (_, type, id, property) => {
+  let processedValue = value.replace(/<(stat|section):(\d+):(name|value|emoji)>/g, (_, type, id, property) => {
     return resolveVariableValue(type, id, property);
+  });
+
+  // Processar variáveis matemáticas
+  processedValue = processedValue.replace(/<math:([^>]+)>/g, (_, expression) => {
+    return evaluateMathExpression(expression);
   });
 
   // Componentes customizados para markdown
@@ -238,8 +334,10 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
 }) {
   const [tab, setTab] = useState<"write" | "preview">("write");
   const [showVariables, setShowVariables] = useState(false);
+  const [showMathEditor, setShowMathEditor] = useState(false);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [variableFilter, setVariableFilter] = useState("");
+  const [mathExpression, setMathExpression] = useState("");
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const insert = useInsertAtCursor(ref.current);
 
@@ -255,6 +353,17 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
         label: "Seções", 
         icon: "📄",
         children: {}
+      },
+      math: {
+        label: "Expressão Matemática",
+        icon: "🧮",
+        children: {
+          editor: { 
+            label: "Abrir Editor", 
+            value: "__MATH_EDITOR__", 
+            icon: "✏️" 
+          }
+        }
       }
     };
 
@@ -337,8 +446,8 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
     const cursorPos = textarea.selectionStart;
     
     if (e.key === 'Backspace' || e.key === 'Delete') {
-      // Check if we're about to delete part of a variable
-      const variableRegex = /<(stat|section):(\d+):(name|value|emoji)>/g;
+      // Check if we're about to delete part of a variable (regular or math)
+      const variableRegex = /<(stat|section):(\d+):(name|value|emoji)>|<math:([^>]+)>/g;
       let match;
       
       while ((match = variableRegex.exec(value)) !== null) {
@@ -365,7 +474,12 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
   };
 
   const handleMenuItemClick = (key: string, item: any) => {
-    if (item.value) {
+    if (item.value === "__MATH_EDITOR__") {
+      // Abrir editor matemático
+      setShowVariables(false);
+      setCurrentPath([]);
+      setShowMathEditor(true);
+    } else if (item.value) {
       // É uma variável final - inserir
       insertVariable(item.value);
     } else if (item.children) {
@@ -408,6 +522,13 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
     }, 0);
   };
 
+  const confirmMathExpression = (expression: string) => {
+    const mathVariable = `<math:${expression}>`;
+    insertVariable(mathVariable);
+    setShowMathEditor(false);
+    setMathExpression("");
+  };
+
   // Gerar cor automática baseada no ID e tipo
   const getVariableColor = (type: string, id: number) => {
     const colors = [
@@ -431,7 +552,7 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
 
   // Renderizar variáveis como pills no texto (usado no editor)
   const renderTextWithPills = (text: string) => {
-    const variableRegex = /<(stat|section):(\d+):(name|value|emoji)>/g;
+    const variableRegex = /<(stat|section):(\d+):(name|value|emoji)>|<math:([^>]+)>/g;
     const parts = [];
     let lastIndex = 0;
     let match;
@@ -442,48 +563,77 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
         parts.push(text.slice(lastIndex, match.index));
       }
       
-      // Adicionar a pill da variável
-      const [fullMatch, type, id, property] = match;
-      const numId = parseInt(id);
+      const [fullMatch, type, id, property, mathExpression] = match;
       
-      // Obter o nome da entidade para exibir na pill
-      const entityName = (() => {
-        if (type === 'stat') {
-          const stat = stats.find(s => s.id === numId);
-          return stat?.name?.[locale] || stat?.name?.default || `Stat ${id}`;
-        } else if (type === 'section') {
-          const section = sections.find(s => s.id === numId);
-          return section?.name?.[locale] || section?.name?.default || `Seção ${id}`;
-        }
-        return `${type} ${id}`;
-      })();
-      
-      // Texto da pill: Nome da entidade + propriedade
-      const pillText = `${entityName} - ${property === 'name' ? 'Nome' : property === 'value' ? 'Valor' : property === 'emoji' ? 'Emoji' : property}`;
-      const colorClass = getVariableColor(type, numId);
-      
-      parts.push(
-        <span 
-          key={`${match.index}-${fullMatch}`} 
-          className={`inline cursor-pointer rounded border ${colorClass}`}
-          style={{ 
-            fontSize: '0.875rem',
-            lineHeight: '1.5rem',
-            padding: '0 2px',
-            display: 'inline',
-            verticalAlign: 'baseline',
-            whiteSpace: 'nowrap'
-          }}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            deleteVariable(fullMatch);
-          }}
-          title={`Clique para deletar: ${fullMatch}`}
-        >
-          {pillText}
-        </span>
-      );
+      if (mathExpression) {
+        // É uma expressão matemática
+        const colorClass = 'bg-purple-100 text-purple-800 border-purple-200';
+        
+        parts.push(
+          <span 
+            key={`${match.index}-${fullMatch}`} 
+            className={`inline cursor-pointer rounded border ${colorClass}`}
+            style={{ 
+              fontSize: '0.875rem',
+              lineHeight: '1.5rem',
+              padding: '0 2px',
+              display: 'inline',
+              verticalAlign: 'baseline',
+              whiteSpace: 'nowrap'
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              deleteVariable(fullMatch);
+            }}
+            title={`Clique para deletar: ${fullMatch}`}
+          >
+            🧮 {mathExpression.length > 20 ? mathExpression.slice(0, 20) + '...' : mathExpression}
+          </span>
+        );
+      } else {
+        // É uma variável normal
+        const numId = parseInt(id);
+        
+        // Obter o nome da entidade para exibir na pill
+        const entityName = (() => {
+          if (type === 'stat') {
+            const stat = stats.find(s => s.id === numId);
+            return stat?.name?.[locale] || stat?.name?.default || `Stat ${id}`;
+          } else if (type === 'section') {
+            const section = sections.find(s => s.id === numId);
+            return section?.name?.[locale] || section?.name?.default || `Seção ${id}`;
+          }
+          return `${type} ${id}`;
+        })();
+        
+        // Texto da pill: Nome da entidade + propriedade
+        const pillText = `${entityName} - ${property === 'name' ? 'Nome' : property === 'value' ? 'Valor' : property === 'emoji' ? 'Emoji' : property}`;
+        const colorClass = getVariableColor(type, numId);
+        
+        parts.push(
+          <span 
+            key={`${match.index}-${fullMatch}`} 
+            className={`inline cursor-pointer rounded border ${colorClass}`}
+            style={{ 
+              fontSize: '0.875rem',
+              lineHeight: '1.5rem',
+              padding: '0 2px',
+              display: 'inline',
+              verticalAlign: 'baseline',
+              whiteSpace: 'nowrap'
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              deleteVariable(fullMatch);
+            }}
+            title={`Clique para deletar: ${fullMatch}`}
+          >
+            {pillText}
+          </span>
+        );
+      }
       
       lastIndex = match.index + fullMatch.length;
     }
@@ -669,6 +819,25 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
             </CardContent>
           </ScrollArea>
         </Card>
+      )}
+
+      {/* Editor de Expressão Matemática */}
+      {showMathEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-background rounded-lg shadow-lg">
+            <MathExpressionEditor
+              value={mathExpression}
+              onChange={setMathExpression}
+              stats={stats}
+              onConfirm={confirmMathExpression}
+            />
+            <div className="p-4 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowMathEditor(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -875,6 +1044,303 @@ function CustomEmojiPicker({ value, onChange, placeholder = "ex.: 🗡️"}:{ va
         />
       </PopoverContent>
     </Popover>
+  );
+}
+
+// =====================
+// Math Expression Editor
+// =====================
+function MathExpressionEditor({ value, onChange, stats = [], onConfirm }:{ 
+  value:string; 
+  onChange:(v:string)=>void; 
+  stats?:Stats[]; 
+  onConfirm?:(expression: string)=>void;
+}){
+  const [expression, setExpression] = useState(value);
+  const [showVariables, setShowVariables] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Filtrar apenas stats que podem ser usados em cálculos (não string)
+  const mathCompatibleStats = stats.filter(stat => 
+    stat.type === 'numeric' || 
+    stat.type === 'boolean' || 
+    stat.type === 'enum' || 
+    stat.type === 'calculated'
+  );
+
+  const insertVariable = (statId: number) => {
+    const variableText = `<stat:${statId}:value>`;
+    
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      // Inserir o texto na posição do cursor
+      const newValue = expression.slice(0, start) + variableText + expression.slice(end);
+      setExpression(newValue);
+      
+      // Reposicionar cursor após a variável inserida
+      setTimeout(() => {
+        const newCursorPos = start + variableText.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }, 0);
+    } else {
+      // Fallback: adicionar no final
+      setExpression(prev => prev + variableText);
+    }
+    
+    setShowVariables(false);
+  };
+
+  const insertOperator = (operator: string) => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      // Inserir o operador na posição do cursor
+      const newValue = expression.slice(0, start) + operator + expression.slice(end);
+      setExpression(newValue);
+      
+      // Reposicionar cursor após o operador
+      setTimeout(() => {
+        const newCursorPos = start + operator.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }, 0);
+    } else {
+      // Fallback: adicionar no final
+      setExpression(prev => prev + operator);
+    }
+  };
+
+  const insertFunction = (func: string) => {
+    const functionText = `${func}(`;
+    
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      // Inserir a função na posição do cursor
+      const newValue = expression.slice(0, start) + functionText + expression.slice(end);
+      setExpression(newValue);
+      
+      // Reposicionar cursor dentro dos parênteses
+      setTimeout(() => {
+        const newCursorPos = start + functionText.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }, 0);
+    } else {
+      // Fallback: adicionar no final
+      setExpression(prev => prev + functionText);
+    }
+  };
+
+  const handleConfirm = () => {
+    onChange(expression);
+    onConfirm?.(expression);
+  };
+
+  // Funções matemáticas disponíveis
+  const mathFunctions = [
+    { name: 'abs', label: 'abs(x)', desc: 'Valor absoluto' },
+    { name: 'sqrt', label: 'sqrt(x)', desc: 'Raiz quadrada' },
+    { name: 'pow', label: 'pow(x,y)', desc: 'Potência x^y' },
+    { name: 'log', label: 'log(x)', desc: 'Logaritmo natural' },
+    { name: 'log10', label: 'log10(x)', desc: 'Logaritmo base 10' },
+    { name: 'sin', label: 'sin(x)', desc: 'Seno' },
+    { name: 'cos', label: 'cos(x)', desc: 'Cosseno' },
+    { name: 'tan', label: 'tan(x)', desc: 'Tangente' },
+    { name: 'floor', label: 'floor(x)', desc: 'Arredondar para baixo' },
+    { name: 'ceil', label: 'ceil(x)', desc: 'Arredondar para cima' },
+    { name: 'round', label: 'round(x)', desc: 'Arredondar' },
+    { name: 'min', label: 'min(a,b)', desc: 'Mínimo' },
+    { name: 'max', label: 'max(a,b)', desc: 'Máximo' },
+  ];
+
+  const operators = [
+    { symbol: '+', label: 'Soma' },
+    { symbol: '-', label: 'Subtração' },
+    { symbol: '*', label: 'Multiplicação' },
+    { symbol: '/', label: 'Divisão' },
+    { symbol: '^', label: 'Potência' },
+    { symbol: '%', label: 'Módulo' },
+    { symbol: '(', label: 'Abre parênteses' },
+    { symbol: ')', label: 'Fecha parênteses' },
+  ];
+
+  return (
+    <Card className="border-dashed">
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          Editor de Expressão Matemática
+          <Badge variant="secondary">math.js</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        
+        {/* Campo de entrada */}
+        <div className="grid gap-2">
+          <Label>Expressão</Label>
+          <Textarea 
+            ref={textareaRef}
+            value={expression}
+            onChange={(e) => setExpression(e.target.value)}
+            placeholder="Digite sua expressão matemática..."
+            className="font-mono text-sm"
+            rows={3}
+          />
+        </div>
+
+        {/* Operadores básicos */}
+        <div className="grid gap-2">
+          <Label>Operadores</Label>
+          <div className="flex flex-wrap gap-1">
+            {operators.map((op) => (
+              <Button
+                key={op.symbol}
+                variant="outline"
+                size="sm"
+                onClick={() => insertOperator(op.symbol)}
+                title={op.label}
+                className="h-8 px-2"
+              >
+                {op.symbol}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Funções matemáticas */}
+        <div className="grid gap-2">
+          <Label>Funções Matemáticas</Label>
+          <ScrollArea className="h-32 border rounded-md p-2">
+            <div className="grid grid-cols-2 gap-1">
+              {mathFunctions.map((func) => (
+                <Button
+                  key={func.name}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertFunction(func.name)}
+                  className="justify-start h-auto p-2 text-left"
+                  title={func.desc}
+                >
+                  <div>
+                    <div className="font-mono text-xs">{func.label}</div>
+                    <div className="text-xs text-muted-foreground">{func.desc}</div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Variáveis disponíveis */}
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <Label>Variáveis (Não-String)</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVariables(!showVariables)}
+            >
+              {showVariables ? 'Ocultar' : 'Mostrar'} ({mathCompatibleStats.length})
+            </Button>
+          </div>
+          
+          {showVariables && (
+            <ScrollArea className="h-32 border rounded-md p-2">
+              {mathCompatibleStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma variável compatível encontrada.
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {mathCompatibleStats.map((stat) => (
+                    <Button
+                      key={stat.id}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => insertVariable(stat.id)}
+                      className="w-full justify-start h-auto p-2 text-left"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <Badge variant="secondary">{stat.type}</Badge>
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            {stat.emoji && `${stat.emoji} `}
+                            {stat.name?.default || `Stat ${stat.id}`}
+                          </div>
+                          <code className="text-xs bg-muted px-1 rounded">
+                            &lt;stat:{stat.id}:value&gt;
+                          </code>
+                        </div>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          )}
+        </div>
+
+        {/* Preview do resultado */}
+        <div className="grid gap-2">
+          <Label>Preview</Label>
+          <div className="bg-muted p-3 rounded-md font-mono text-sm">
+            {expression ? (
+              <>
+                <div className="text-muted-foreground mb-1">Expressão:</div>
+                <div className="mb-2">{expression}</div>
+                <div className="text-muted-foreground mb-1">Resultado (com valores de exemplo):</div>
+                <div className="text-green-600">
+                  {(() => {
+                    try {
+                      // Substituir variáveis por valores de exemplo para preview
+                      const previewExpression = expression.replace(/<stat:(\d+):value>/g, (_, id) => {
+                        const stat = stats.find(s => s.id === parseInt(id));
+                        if (!stat) return '1';
+                        switch (stat.type) {
+                          case 'numeric': return String(stat.min || 1);
+                          case 'boolean': return '0';
+                          case 'enum': 
+                            if (Array.isArray(stat.options) && stat.options.length > 0) {
+                              return String(stat.options[0].value);
+                            }
+                            return '1';
+                          default: return '1';
+                        }
+                      });
+                      const result = evaluate(previewExpression);
+                      // Garantir que o resultado seja sempre uma string
+                      return typeof result === 'object' ? JSON.stringify(result) : String(result);
+                    } catch {
+                      return '[Expressão inválida]';
+                    }
+                  })()}
+                </div>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Digite uma expressão para ver o preview</span>
+            )}
+          </div>
+        </div>
+
+        {/* Botões de ação */}
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={() => setExpression('')}>
+            Limpar
+          </Button>
+          <Button onClick={handleConfirm}>
+            Confirmar
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1286,19 +1752,106 @@ function StatStringEditor({ value, onChange, sections }:{ value:StatsString; onC
     </div>
   );
 }
-function StatCalculatedEditor({ value, onChange, sections }:{ value:StatsCalculated; onChange:(v:StatsCalculated)=>void; sections:Section[] }){ const patch=(p:Partial<StatsCalculated>)=>onChange({ ...value, ...p }); return (
-  <div className="grid gap-4"><BaseStatFields stat={value} onPatch={patch} sections={sections}/>
-    <div className="grid gap-2"><Label>Fórmula (string)</Label><Input value={value.formula} onChange={(e)=>patch({ formula:e.target.value })} placeholder="ex.: STR + DEX / 2"/></div>
-    <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
-    <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })}/>
-  </div>
-);}
-function StatViewEditor({ value, onChange, sections }:{ value:StatsExtraDice; onChange:(v:StatsExtraDice)=>void; sections:Section[] }){ const patch=(p:Partial<StatsExtraDice>)=>onChange({ ...value, ...p }); return (
-  <div className="grid gap-4"><BaseStatFields stat={value} onPatch={patch} sections={sections}/>
-    <div className="grid gap-2"><Label>Componente (nome)</Label><Input value={value.component} onChange={(e)=>patch({ component:e.target.value })} placeholder="ex.: ExtraDicePanel"/></div>
-    <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
-  </div>
-);}
+function StatCalculatedEditor({ value, onChange, sections, allStats }:{ value:StatsCalculated; onChange:(v:StatsCalculated)=>void; sections:Section[]; allStats:Stats[] }){ 
+  const [showMathEditor, setShowMathEditor] = useState(false);
+  const [tempFormula, setTempFormula] = useState("");
+  
+  const patch=(p:Partial<StatsCalculated>)=>onChange({ ...value, ...p }); 
+  
+  // Filtrar stats que podem ser usados (excluir o próprio stat e stats que dependem dele)
+  const getAvailableStats = () => {
+    return allStats.filter(stat => {
+      // Excluir o próprio stat
+      if (stat.id === value.id) return false;
+      
+      // Excluir stats do tipo string
+      if (stat.type === 'string') return false;
+      
+      // Para stats calculated, verificar se não criariam ciclo
+      if (stat.type === 'calculated') {
+        // Simular se incluir este stat criaria recursão
+        const testFormula = `${value.formula} + <stat:${stat.id}:value>`;
+        if (hasCircularDependency(value.id, testFormula, allStats)) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  };
+
+  const openMathEditor = () => {
+    setTempFormula(value.formula || "");
+    setShowMathEditor(true);
+  };
+
+  const confirmFormula = (formula: string) => {
+    // Verificar se a nova fórmula não cria recursão
+    if (hasCircularDependency(value.id, formula, allStats)) {
+      toast.error("Esta fórmula criaria uma dependência circular!");
+      return;
+    }
+    
+    patch({ formula });
+    setShowMathEditor(false);
+    setTempFormula("");
+    toast.success("Fórmula atualizada!");
+  }; 
+  
+  return (
+    <div className="grid gap-4">
+      <BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+      <div className="grid gap-2">
+        <div className="flex items-center justify-between">
+          <Label>Fórmula</Label>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={openMathEditor}
+            className="flex items-center gap-2"
+          >
+            🧮 Abrir Editor Matemático
+          </Button>
+        </div>
+        <Input 
+          value={value.formula} 
+          onChange={(e)=>patch({ formula:e.target.value })} 
+          placeholder="ex.: <stat:1:value> + <stat:2:value> / 2"
+          className="font-mono text-sm"
+        />
+        <p className="text-xs text-muted-foreground">
+          Use variáveis como &lt;stat:ID:value&gt; ou abra o editor matemático para uma experiência visual.
+        </p>
+      </div>
+      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
+      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })}/>
+      
+      {/* Editor Matemático Modal */}
+      {showMathEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-background rounded-lg shadow-lg">
+            <div className="p-4 border-b">
+              <h3 className="text-lg font-semibold">Editor de Fórmula Calculada</h3>
+              <p className="text-sm text-muted-foreground">
+                Stats disponíveis (filtrados para evitar recursão)
+              </p>
+            </div>
+            <MathExpressionEditor
+              value={tempFormula}
+              onChange={setTempFormula}
+              stats={getAvailableStats()}
+              onConfirm={confirmFormula}
+            />
+            <div className="p-4 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowMathEditor(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );}
 function PolymorphicStatEditor({ value, onChange, sections, allStats }:{ value:Stats; onChange:(v:Stats)=>void; sections:Section[]; allStats:Stats[] }){
   return (
     <div className="grid gap-4">
@@ -1306,8 +1859,7 @@ function PolymorphicStatEditor({ value, onChange, sections, allStats }:{ value:S
       {value.type==="enum" && <StatEnumEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
       {value.type==="boolean" && <StatBooleanEditor value={value} onChange={onChange as any} sections={sections}/>} 
       {value.type==="string" && <StatStringEditor value={value} onChange={onChange as any} sections={sections}/>} 
-      {value.type==="calculated" && <StatCalculatedEditor value={value} onChange={onChange as any} sections={sections}/>} 
-      {value.type==="view" && <StatViewEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="calculated" && <StatCalculatedEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
     </div>
   );
 }
@@ -1434,7 +1986,24 @@ function validate(system:RPGSystem): string[] {
       }
     }
     if (s.type === "calculated") {
-      const c = s as StatsCalculated; if (!c.formula) errs.push(`stats[${idx}].formula é obrigatório`);
+      const c = s as StatsCalculated; 
+      if (!c.formula) errs.push(`stats[${idx}].formula é obrigatório`);
+      
+      // Verificar se há dependências circulares
+      if (c.formula && hasCircularDependency(c.id, c.formula, system.stats)) {
+        errs.push(`stats[${idx}] tem dependência circular na fórmula`);
+      }
+      
+      // Verificar se as variáveis referenciadas existem
+      const dependencies = findStatDependencies(c.formula);
+      dependencies.forEach(depId => {
+        const depStat = system.stats.find(s => s.id === depId);
+        if (!depStat) {
+          errs.push(`stats[${idx}].formula referencia stat inexistente: ${depId}`);
+        } else if (depStat.type === 'string') {
+          errs.push(`stats[${idx}].formula referencia stat do tipo string: ${depId}`);
+        }
+      });
     }
   });
 
@@ -1475,7 +2044,6 @@ export default function RPGSystemBuilder(){
       case "boolean": stat={...base, type:"boolean"} as StatsBoolean; break;
       case "string": stat={...base, type:"string", minLength:0, maxLength:200} as StatsString; break;
       case "calculated": stat={...base, type:"calculated", formula:""} as StatsCalculated; break;
-      case "view": stat={...base, type:"view", component:"ExtraDicePanel"} as StatsExtraDice; break;
     }
     setSystem({ ...system, stats:[...system.stats, stat] }); setSelectedTab("stats");
   };
@@ -1527,26 +2095,29 @@ export default function RPGSystemBuilder(){
             <Button size="sm" variant="secondary" onClick={()=>addStat("boolean")}>+ Boolean</Button>
             <Button size="sm" variant="secondary" onClick={()=>addStat("string")}>+ String</Button>
             <Button size="sm" variant="secondary" onClick={()=>addStat("calculated")}>+ Calculated</Button>
-            <Button size="sm" variant="secondary" onClick={()=>addStat("view")}>+ View</Button>
           </div>
           <div className="grid gap-4">
             {system.stats.map((st,i)=>(
               <Card key={i} className="relative">
+                <div className="flex items-center justify-end gap-1 absolute top-2 right-2 z-10">
+                  <Button size="icon" variant="ghost" onClick={()=>moveStat(i,-1)} title="Mover para cima">
+                    <ChevronUp className="h-4 w-4"/>
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={()=>moveStat(i,+1)} title="Mover para baixo">
+                    <ChevronDown className="h-4 w-4"/>
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={()=>removeStat(i)} title="Remover stat">
+                    <Trash2 className="h-4 w-4"/>
+                  </Button>
+                </div>
                 <Collapsible defaultOpen={false}>
                   <CollapsibleTrigger className="w-full text-left">
-                    <CardHeader className="py-3">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Badge variant="secondary">{st.type}</Badge>
-                          <span>{st.name?.default || `Stat ${i+1}`}</span>
-                          <ChevronRight className="h-4 w-4 transition-transform duration-200 ui-state-open:rotate-90" />
-                        </CardTitle>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <Button size="icon" variant="ghost" onClick={()=>moveStat(i,-1)}><ChevronUp className="h-4 w-4"/></Button>
-                          <Button size="icon" variant="ghost" onClick={()=>moveStat(i,+1)}><ChevronDown className="h-4 w-4"/></Button>
-                          <Button size="icon" variant="ghost" onClick={()=>removeStat(i)}><Trash2 className="h-4 w-4"/></Button>
-                        </div>
-                      </div>
+                    <CardHeader className="py-3 pr-32">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Badge variant="secondary">{st.type}</Badge>
+                        <span>{st.name?.default || `Stat ${i+1}`}</span>
+                        <ChevronRight className="h-4 w-4 transition-transform duration-200 ui-state-open:rotate-90" />
+                      </CardTitle>
                     </CardHeader>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
