@@ -36,6 +36,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import EmojiPickerReact from "emoji-picker-react";
 import { evaluate } from "mathjs";
+import { DiceRoll } from '@dice-roller/rpg-dice-roller';
 
 // =====================
 // Types
@@ -55,10 +56,10 @@ interface BaseStat {
   emoji?: string;
 }
 
-interface StatsNumeric extends BaseStat { type: "numeric"; min?: number; max?: number; }
+interface StatsNumeric extends BaseStat { type: "numeric"; min?: number; max?: number; dices?: Dice[]; replacements?: Replacement[]; }
 interface StatsEnumOption { value: number; name: LabelLocalization; emoji?: string; }
 interface StatsEnum extends BaseStat { type: "enum"; options: StatsEnumOption[] | number; dices?: Dice[]; replacements?: Replacement[]; }
-interface StatsBoolean extends BaseStat { type: "boolean"; }
+interface StatsBoolean extends BaseStat { type: "boolean"; dices?: Dice[]; replacements?: Replacement[]; }
 interface StatsString extends BaseStat { type: "string"; maxLength?: number; minLength?: number; }
 interface StatsCalculated extends BaseStat { type: "calculated"; formula: string; dices?: Dice[]; replacements?: Replacement[]; }
 interface Replacement { key: number; options: number[]; }
@@ -263,6 +264,46 @@ const SmartPreview = ({ value, sections = [], stats = [], locale = 'default' }: 
     }
   };
 
+  // Função para avaliar dados (dice notation)
+  const evaluateDiceExpression = (expression: string): string => {
+    try {
+      // Substituir variáveis na expressão por seus valores numéricos (mesma lógica do math)
+      const processedExpression = expression.replace(/<(stat):(\d+):(value)>/g, (_, __, id) => {
+        const numId = parseInt(id);
+        const stat = stats.find(s => s.id === numId);
+        
+        if (!stat) return '3';
+        
+        switch (stat.type) {
+          case 'numeric':
+            return String(stat.min || 3);
+          case 'boolean':
+            return '1';
+          case 'enum':
+            if (Array.isArray(stat.options) && stat.options.length > 0) {
+              return String(stat.options[0].value);
+            } else if (typeof stat.options === 'number' && stat.options > 0) {
+              const referencedStat = stats.find(s => s.id === stat.options) as StatsEnum | undefined;
+              if (referencedStat && Array.isArray(referencedStat.options) && referencedStat.options.length > 0) {
+                return String(referencedStat.options[0].value);
+              }
+            }
+            return '2';
+          case 'calculated':
+            return '3';
+          default:
+            return '3';
+        }
+      });
+
+      // Usar a biblioteca de dados para rolar
+      const roll = new DiceRoll(processedExpression);
+      return `🎲 ${roll.output}`;
+    } catch (error) {
+      return `[Erro dados: ${error instanceof Error ? error.message : expression}]`;
+    }
+  };
+
   // Processar variáveis para valores reais
   let processedValue = value.replace(/<(stat|section):(\d+):(name|value|emoji)>/g, (_, type, id, property) => {
     return resolveVariableValue(type, id, property);
@@ -272,6 +313,15 @@ const SmartPreview = ({ value, sections = [], stats = [], locale = 'default' }: 
   processedValue = processedValue.replace(/<math:([^>]+)>/g, (_, expression) => {
     return evaluateMathExpression(expression);
   });
+
+  // Processar dados (dice notation)
+  processedValue = processedValue.replace(/<dice:([^>]+)>/g, (_, expression) => {
+    return evaluateDiceExpression(expression);
+  });
+
+  // Converter quebras de linha simples em quebras de linha Markdown (duas quebras)
+  // Isso preserva quebras de linha no preview sem quebrar a formatação Markdown
+  processedValue = processedValue.replace(/\n/g, '  \n');
 
   // Componentes customizados para markdown
   const components = {
@@ -332,12 +382,14 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
   stats?: Stats[];
   locale?: string;
 }) {
-  const [tab, setTab] = useState<"write" | "preview">("write");
+  const [tab, setTab] = useState<"write" | "preview" | "split">("write");
   const [showVariables, setShowVariables] = useState(false);
   const [showMathEditor, setShowMathEditor] = useState(false);
+  const [showDiceEditor, setShowDiceEditor] = useState(false);
   const [currentPath, setCurrentPath] = useState<string[]>([]);
   const [variableFilter, setVariableFilter] = useState("");
   const [mathExpression, setMathExpression] = useState("");
+  const [diceExpression, setDiceExpression] = useState("");
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const insert = useInsertAtCursor(ref.current);
 
@@ -362,6 +414,17 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
             label: "Abrir Editor", 
             value: "__MATH_EDITOR__", 
             icon: "✏️" 
+          }
+        }
+      },
+      dice: {
+        label: "Dados (Dice)",
+        icon: "🎲",
+        children: {
+          editor: { 
+            label: "Abrir Editor", 
+            value: "__DICE_EDITOR__", 
+            icon: "🎯" 
           }
         }
       }
@@ -479,6 +542,11 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
       setShowVariables(false);
       setCurrentPath([]);
       setShowMathEditor(true);
+    } else if (item.value === "__DICE_EDITOR__") {
+      // Abrir editor de dados
+      setShowVariables(false);
+      setCurrentPath([]);
+      setShowDiceEditor(true);
     } else if (item.value) {
       // É uma variável final - inserir
       insertVariable(item.value);
@@ -527,6 +595,13 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
     insertVariable(mathVariable);
     setShowMathEditor(false);
     setMathExpression("");
+  };
+
+  const confirmDiceExpression = (expression: string) => {
+    const diceVariable = `<dice:${expression}>`;
+    insertVariable(diceVariable);
+    setShowDiceEditor(false);
+    setDiceExpression("");
   };
 
   // Gerar cor automática baseada no ID e tipo
@@ -669,10 +744,11 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
               <TabsList className="h-8">
                 <TabsTrigger value="write">Escrever</TabsTrigger>
+                <TabsTrigger value="split">Dividido</TabsTrigger>
                 <TabsTrigger value="preview">Preview</TabsTrigger>
               </TabsList>
             </Tabs>
-            {tab === "write" && (
+            {(tab === "write" || tab === "split") && (
               <div className="flex items-center gap-1">
                 <ToolbarButton title="Título" onClick={() => insert("# ", "", "Título")}>
                   <Heading1 className="h-4 w-4"/>
@@ -744,6 +820,61 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
                   fontSize: '0.875rem'
                 }}
               />
+            </div>
+          ) : tab === "split" ? (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="relative">
+                <h4 className="text-sm font-medium mb-2">Editor</h4>
+                <div className="relative">
+                  {/* Overlay visual com pills */}
+                  <div className="min-h-[120px] border border-input bg-background px-3 py-2 text-sm ring-offset-background pointer-events-none overflow-auto whitespace-pre-wrap break-words rounded-md absolute inset-0 z-10" style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>
+                    {value ? (
+                      <div style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>
+                        {renderTextWithPills(value).map((part, i) => 
+                          typeof part === 'string' ? 
+                            <span key={i} className="whitespace-pre-wrap" style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>{part}</span> : 
+                            part
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground" style={{ lineHeight: '1.5rem', fontSize: '0.875rem' }}>
+                        {placeholder || "Digite seu markdown aqui... Use / para inserir variáveis"}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Textarea para capturar input e mostrar cursor */}
+                  <Textarea 
+                    ref={ref} 
+                    className="min-h-[120px] resize-y relative z-20 bg-transparent text-transparent selection:bg-primary/20" 
+                    value={value} 
+                    onChange={handleTextareaChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder=""
+                    style={{
+                      caretColor: 'hsl(var(--foreground))',
+                      color: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      boxShadow: 'none',
+                      lineHeight: '1.5rem',
+                      padding: '0.5rem 0.75rem',
+                      fontSize: '0.875rem'
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium mb-2">Preview ao Vivo</h4>
+                <div className="border rounded-xl p-4 bg-background min-h-[120px]">
+                  <SmartPreview 
+                    value={value} 
+                    sections={sections} 
+                    stats={stats} 
+                    locale={locale}
+                  />
+                </div>
+              </div>
             </div>
           ) : (
             <div className="border rounded-xl p-4 bg-background min-h-[120px]">
@@ -833,6 +964,25 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
             />
             <div className="p-4 border-t flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowMathEditor(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editor de Dice Notation */}
+      {showDiceEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-background rounded-lg shadow-lg">
+            <DiceNotationEditor
+              value={diceExpression}
+              onChange={setDiceExpression}
+              stats={stats}
+              onConfirm={confirmDiceExpression}
+            />
+            <div className="p-4 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowDiceEditor(false)}>
                 Cancelar
               </Button>
             </div>
@@ -1345,48 +1495,878 @@ function MathExpressionEditor({ value, onChange, stats = [], onConfirm }:{
 }
 
 // =====================
-// Dice, Replacement Editors
+// Dice Notation Editor
 // =====================
-function DiceEditor({ value, onChange }:{ value: Dice[]|undefined; onChange:(v?:Dice[])=>void }){
-  const dices = value ?? [];
-  const add = () => onChange([...(value ?? []), { expression: "1d20" }]);
-  const remove = (i:number) => onChange(dices.filter((_,idx)=>idx!==i));
-  const set = (i:number, patch:Partial<Dice>) => onChange(dices.map((d,idx)=>(idx===i?{...d,...patch}:d)));
+function DiceNotationEditor({ value, onChange, stats = [], onConfirm }:{ 
+  value:string; 
+  onChange:(v:string)=>void; 
+  stats?:Stats[]; 
+  onConfirm?:(expression: string)=>void;
+}){
+  const [expression, setExpression] = useState(value);
+  const [showVariables, setShowVariables] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Filtrar apenas stats que podem ser usados em dados (não string)
+  const diceCompatibleStats = stats.filter(stat => 
+    stat.type === 'numeric' || 
+    stat.type === 'boolean' || 
+    stat.type === 'enum' || 
+    stat.type === 'calculated'
+  );
+
+  const insertVariable = (statId: number) => {
+    const variableText = `<stat:${statId}:value>`;
+    
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      // Inserir o texto na posição do cursor
+      const newValue = expression.slice(0, start) + variableText + expression.slice(end);
+      setExpression(newValue);
+      
+      // Reposicionar cursor após a variável inserida
+      setTimeout(() => {
+        const newCursorPos = start + variableText.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }, 0);
+    } else {
+      // Fallback: adicionar no final
+      setExpression(prev => prev + variableText);
+    }
+    
+    setShowVariables(false);
+  };
+
+  const insertDiceOperator = (operator: string) => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      // Inserir o operador na posição do cursor
+      const newValue = expression.slice(0, start) + operator + expression.slice(end);
+      setExpression(newValue);
+      
+      // Reposicionar cursor após o operador
+      setTimeout(() => {
+        const newCursorPos = start + operator.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        textarea.focus();
+      }, 0);
+    } else {
+      // Fallback: adicionar no final
+      setExpression(prev => prev + operator);
+    }
+  };
+
+  const handleConfirm = () => {
+    onChange(expression);
+    onConfirm?.(expression);
+  };
+
+  // Operadores e dados comuns
+  const diceOperators = [
+    { symbol: '+', label: 'Soma' },
+    { symbol: '-', label: 'Subtração' },
+    { symbol: '*', label: 'Multiplicação' },
+    { symbol: '/', label: 'Divisão' },
+    { symbol: '(', label: 'Abre parênteses' },
+    { symbol: ')', label: 'Fecha parênteses' },
+  ];
+
+  const commonDice = [
+    { notation: '1d4', label: 'D4' },
+    { notation: '1d6', label: 'D6' },
+    { notation: '1d8', label: 'D8' },
+    { notation: '1d10', label: 'D10' },
+    { notation: '1d12', label: 'D12' },
+    { notation: '1d20', label: 'D20' },
+    { notation: '1d100', label: 'D100' },
+    { notation: '2d6', label: '2D6' },
+    { notation: '3d6', label: '3D6' },
+    { notation: '4d6', label: '4D6' },
+  ];
+
+  const diceModifiers = [
+    { notation: 'kh1', label: 'kh1 (keep highest 1)', desc: 'Manter o maior valor' },
+    { notation: 'kl1', label: 'kl1 (keep lowest 1)', desc: 'Manter o menor valor' },
+    { notation: 'dh1', label: 'dh1 (drop highest 1)', desc: 'Descartar o maior valor' },
+    { notation: 'dl1', label: 'dl1 (drop lowest 1)', desc: 'Descartar o menor valor' },
+    { notation: 'r1', label: 'r1 (reroll 1s)', desc: 'Re-rolar valores 1' },
+    { notation: 'x', label: 'x (explode)', desc: 'Explodir no máximo' },
+    { notation: '!', label: '! (explode)', desc: 'Explodir no máximo' },
+    { notation: '!!', label: '!! (compound)', desc: 'Explosão composta' },
+    { notation: '!p', label: '!p (penetrating)', desc: 'Explosão penetrante' },
+    { notation: 'min1', label: 'min1', desc: 'Valor mínimo 1' },
+    { notation: 'max20', label: 'max20', desc: 'Valor máximo 20' },
+    { notation: 'cs>15', label: 'cs>15 (count success)', desc: 'Contar sucessos >15' },
+    { notation: 'cf<5', label: 'cf<5 (count failures)', desc: 'Contar falhas <5' },
+    { notation: 'sa', label: 'sa (sort ascending)', desc: 'Ordenar crescente' },
+    { notation: 'sd', label: 'sd (sort descending)', desc: 'Ordenar decrescente' },
+    { notation: 'u', label: 'u (unique)', desc: 'Valores únicos' },
+  ];
+
   return (
-    <Card>
-      <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2">Dados<Button size="sm" variant="secondary" onClick={add}><Plus className="h-4 w-4"/> Adicionar dado</Button></CardTitle></CardHeader>
-      <CardContent className="grid gap-3">
-        {dices.length===0 && <p className="text-sm text-muted-foreground">Sem dados vinculados.</p>}
-        {dices.map((d,i)=>(
-          <div key={i} className="grid gap-2 border rounded-xl p-3">
-            <div className="flex gap-2 items-center"><Label className="min-w-20">Expressão</Label><Input value={d.expression} onChange={(e)=>set(i,{expression:e.target.value})}/><Button size="icon" variant="ghost" onClick={()=>remove(i)}><Trash2 className="h-4 w-4"/></Button></div>
-            <div className="grid md:grid-cols-3 gap-2">
-              <div className="flex gap-2 items-center"><Label className="min-w-20">v1</Label><Input value={d.condition?.value1 ?? ""} onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), value1:e.target.value}})} /></div>
-              <div className="flex gap-2 items-center"><Label className="min-w-20">op</Label><Input value={d.condition?.operator ?? "=="} onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), operator:e.target.value as any}})} /></div>
-              <div className="flex gap-2 items-center"><Label className="min-w-20">v2</Label><Input value={d.condition?.value2 ?? ""} onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), value2:e.target.value}})} /></div>
-            </div>
+    <Card className="border-dashed">
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          Editor de Dice Notation
+          <Badge variant="secondary">D&D Style</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        
+        {/* Campo de entrada */}
+        <div className="grid gap-2">
+          <Label>Expressão de Dados</Label>
+          <Textarea 
+            ref={textareaRef}
+            value={expression}
+            onChange={(e) => setExpression(e.target.value)}
+            placeholder="Ex: 1d20 + <stat:1:value>"
+            className="font-mono text-sm"
+            rows={3}
+          />
+          <p className="text-xs text-muted-foreground">
+            Use notação padrão: 1d20, 2d6+3, 4d6kh3, etc. Adicione variáveis clicando abaixo.
+          </p>
+        </div>
+
+        {/* Dados Comuns */}
+        <div className="grid gap-2">
+          <Label>Dados Comuns</Label>
+          <div className="flex flex-wrap gap-1">
+            {commonDice.map((dice) => (
+              <Button
+                key={dice.notation}
+                variant="outline"
+                size="sm"
+                onClick={() => insertDiceOperator(dice.notation)}
+                className="h-8 px-2"
+              >
+                {dice.label}
+              </Button>
+            ))}
           </div>
-        ))}
+        </div>
+
+        {/* Operadores */}
+        <div className="grid gap-2">
+          <Label>Operadores</Label>
+          <div className="flex flex-wrap gap-1">
+            {diceOperators.map((op) => (
+              <Button
+                key={op.symbol}
+                variant="outline"
+                size="sm"
+                onClick={() => insertDiceOperator(op.symbol)}
+                title={op.label}
+                className="h-8 px-2"
+              >
+                {op.symbol}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Modificadores Avançados */}
+        <div className="grid gap-2">
+          <Label>Modificadores Avançados</Label>
+          <ScrollArea className="h-24 border rounded-md p-2">
+            <div className="grid grid-cols-2 gap-1">
+              {diceModifiers.map((mod) => (
+                <Button
+                  key={mod.notation}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => insertDiceOperator(mod.notation)}
+                  className="justify-start h-auto p-2 text-left"
+                  title={mod.desc}
+                >
+                  <div>
+                    <div className="font-mono text-xs">{mod.label}</div>
+                    <div className="text-xs text-muted-foreground">{mod.desc}</div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+
+        {/* Variáveis disponíveis */}
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <Label>Variáveis (Stats)</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowVariables(!showVariables)}
+            >
+              {showVariables ? 'Ocultar' : 'Mostrar'} ({diceCompatibleStats.length})
+            </Button>
+          </div>
+          
+          {showVariables && (
+            <ScrollArea className="h-32 border rounded-md p-2">
+              {diceCompatibleStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Nenhuma variável compatível encontrada.
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {diceCompatibleStats.map((stat) => (
+                    <Button
+                      key={stat.id}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => insertVariable(stat.id)}
+                      className="w-full justify-start h-auto p-2 text-left"
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <Badge variant="secondary">{stat.type}</Badge>
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            {stat.emoji && `${stat.emoji} `}
+                            {stat.name?.default || `Stat ${stat.id}`}
+                          </div>
+                          <code className="text-xs bg-muted px-1 rounded">
+                            &lt;stat:{stat.id}:value&gt;
+                          </code>
+                        </div>
+                      </div>
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          )}
+        </div>
+
+        {/* Preview do resultado */}
+        <div className="grid gap-2">
+          <Label>Preview</Label>
+          <div className="bg-muted p-3 rounded-md font-mono text-sm">
+            {expression ? (
+              <>
+                <div className="text-muted-foreground mb-1">Expressão:</div>
+                <div className="mb-2">{expression}</div>
+                <div className="text-muted-foreground mb-1">Com valores exemplo:</div>
+                <div className="text-blue-600">
+                  {(() => {
+                    try {
+                      // Substituir variáveis por valores de exemplo para preview
+                      const previewExpression = expression.replace(/<stat:(\d+):value>/g, (_, id) => {
+                        const stat = stats.find(s => s.id === parseInt(id));
+                        if (!stat) return '3';
+                        switch (stat.type) {
+                          case 'numeric': return String(stat.min || 3);
+                          case 'boolean': return '1';
+                          case 'enum': 
+                            if (Array.isArray(stat.options) && stat.options.length > 0) {
+                              return String(stat.options[0].value);
+                            }
+                            return '2';
+                          default: return '3';
+                        }
+                      });
+                      
+                      // Usar DiceRoll para validar e testar a expressão
+                      const roll = new DiceRoll(previewExpression);
+                      return `${previewExpression} → ${roll.output}`;
+                    } catch (error) {
+                      return `[Erro: ${error instanceof Error ? error.message : 'Expressão inválida'}]`;
+                    }
+                  })()}
+                </div>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Digite uma expressão para ver o preview</span>
+            )}
+          </div>
+        </div>
+
+        {/* Botões de ação */}
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={() => setExpression('')}>
+            Limpar
+          </Button>
+          <Button onClick={handleConfirm}>
+            Confirmar
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
 }
-function ReplacementEditor({ value, onChange }:{ value:Replacement[]|undefined; onChange:(v?:Replacement[])=>void }){
-  const reps = value ?? [];
-  const add = () => onChange([...(value ?? []), { key: 0, options: [] }]);
-  const remove = (i:number) => onChange(reps.filter((_,idx)=>idx!==i));
-  const set = (i:number, patch:Partial<Replacement>) => onChange(reps.map((d,idx)=>(idx===i?{...d,...patch}:d)));
+// =====================
+// Dice, Replacement Editors
+// =====================
+function DiceEditor({ value, onChange, stats = [] }:{ value: Dice[]|undefined; onChange:(v?:Dice[])=>void; stats?:Stats[]; }){
+  const dices = value ?? [];
+  const [showDiceEditor, setShowDiceEditor] = useState(false);
+  const [editingDiceIndex, setEditingDiceIndex] = useState<number>(-1);
+  const [tempExpression, setTempExpression] = useState("");
+  
+  const add = () => {
+    const newDice = { expression: "1d20" };
+    onChange([...dices, newDice]);
+    setEditingDiceIndex(dices.length);
+    setTempExpression("1d20");
+    setShowDiceEditor(true);
+  };
+  
+  const remove = (i:number) => onChange(dices.filter((_,idx)=>idx!==i));
+  
+  const set = (i:number, patch:Partial<Dice>) => onChange(dices.map((d,idx)=>(idx===i?{...d,...patch}:d)));
+  
+  const openDiceEditor = (index: number) => {
+    setEditingDiceIndex(index);
+    setTempExpression(dices[index]?.expression || "1d20");
+    setShowDiceEditor(true);
+  };
+
+  const confirmDiceExpression = (expression: string) => {
+    if (editingDiceIndex >= 0 && editingDiceIndex < dices.length) {
+      set(editingDiceIndex, { expression });
+    }
+    setShowDiceEditor(false);
+    setEditingDiceIndex(-1);
+    setTempExpression("");
+    toast.success("Expressão de dados atualizada!");
+  };
+
+  const moveUp = (index: number) => {
+    if (index > 0) {
+      const newDices = [...dices];
+      [newDices[index - 1], newDices[index]] = [newDices[index], newDices[index - 1]];
+      onChange(newDices);
+    }
+  };
+
+  const moveDown = (index: number) => {
+    if (index < dices.length - 1) {
+      const newDices = [...dices];
+      [newDices[index], newDices[index + 1]] = [newDices[index + 1], newDices[index]];
+      onChange(newDices);
+    }
+  };
+
   return (
     <Card>
-      <CardHeader className="py-3"><CardTitle className="text-sm flex items-center gap-2">Replacements (substituições)<Button size="sm" variant="secondary" onClick={add}><Plus className="h-4 w-4"/> Adicionar</Button></CardTitle></CardHeader>
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          🎲 Dados (Sistema de Condições)
+          <Button size="sm" variant="secondary" onClick={add}>
+            <Plus className="h-4 w-4"/> Adicionar dado
+          </Button>
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Os dados são executados de cima para baixo. Primeiro dado com condição válida (ou sem condição) é executado.
+        </p>
+      </CardHeader>
       <CardContent className="grid gap-3">
-        {reps.length===0 && <p className="text-sm text-muted-foreground">Sem replacements.</p>}
-        {reps.map((r,i)=>(
-          <div key={i} className="grid gap-2 border rounded-xl p-3">
-            <div className="flex gap-2 items-center"><Label className="min-w-32">key</Label><Input type="number" value={r.key} onChange={(e)=>set(i,{key:Number(e.target.value)})}/><Button size="icon" variant="ghost" onClick={()=>remove(i)}><Trash2 className="h-4 w-4"/></Button></div>
-            <div className="flex gap-2 items-center"><Label className="min-w-32">options (lista de números, sep. por vírgula)</Label><Input value={(r.options ?? []).join(",")} onChange={(e)=>set(i,{options:e.target.value.split(",").map((n)=>Number(n.trim())).filter((n)=>!Number.isNaN(n))})} /></div>
+        {dices.length===0 && (
+          <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+            <div className="text-2xl mb-2">🎲</div>
+            <p className="text-sm">Nenhum dado configurado.</p>
+            <p className="text-xs">Adicione dados para criar sistema de rolagem.</p>
           </div>
+        )}
+        
+        {dices.map((d,i)=>(
+          <Card key={i} className={`${i === dices.length - 1 && !d.condition ? 'border-green-200 bg-green-50' : 'border-dashed'}`}>
+            <CardHeader className="py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Badge variant={i === dices.length - 1 && !d.condition ? "default" : "secondary"}>
+                    {i === dices.length - 1 && !d.condition ? "🎯 Padrão" : `Dado ${i+1}`}
+                  </Badge>
+                  <code className="text-sm bg-muted px-2 py-1 rounded">
+                    {d.expression || "1d20"}
+                  </code>
+                  {d.condition && (
+                    <Badge variant="outline" className="text-xs">
+                      Se: {d.condition.value1} {d.condition.operator} {d.condition.value2}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={() => moveUp(i)} 
+                    disabled={i === 0}
+                    title="Mover para cima"
+                  >
+                    <ChevronUp className="h-4 w-4"/>
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={() => moveDown(i)} 
+                    disabled={i === dices.length - 1}
+                    title="Mover para baixo"
+                  >
+                    <ChevronDown className="h-4 w-4"/>
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={() => openDiceEditor(i)}
+                    title="Editar expressão"
+                  >
+                    🎲
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={()=>remove(i)}
+                    title="Remover dado"
+                    disabled={dices.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4"/>
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              
+              {/* Condição (opcional exceto para o último) */}
+              {i < dices.length - 1 && (
+                <div className="grid gap-2">
+                  <Label className="text-xs">Condição (quando executar este dado)</Label>
+                  <div className="grid md:grid-cols-3 gap-2">
+                    <div className="flex gap-2 items-center">
+                      <Label className="min-w-16 text-xs">Valor 1</Label>
+                      <Input 
+                        value={d.condition?.value1 ?? ""} 
+                        onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), value1:e.target.value}})} 
+                        placeholder="<stat:1:value> ou 10"
+                        className="text-xs font-mono"
+                      />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Label className="min-w-16 text-xs">Operador</Label>
+                      <Select 
+                        value={d.condition?.operator ?? "=="} 
+                        onValueChange={(val) => set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), operator:val as any}})}
+                      >
+                        <SelectTrigger className="text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="==">=</SelectItem>
+                          <SelectItem value="!=">≠</SelectItem>
+                          <SelectItem value="<">&lt;</SelectItem>
+                          <SelectItem value=">">&gt;</SelectItem>
+                          <SelectItem value="<=">&le;</SelectItem>
+                          <SelectItem value=">=">&ge;</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Label className="min-w-16 text-xs">Valor 2</Label>
+                      <Input 
+                        value={d.condition?.value2 ?? ""} 
+                        onChange={(e)=>set(i,{condition:{...(d.condition??{operator:"==",value1:"",value2:""}), value2:e.target.value}})} 
+                        placeholder="<stat:2:value> ou 5"
+                        className="text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    🧮 <strong>Suporte a expressões matemáticas:</strong> Use &lt;stat:ID:value&gt; para variáveis, 
+                    operações como (10 + 5), funções como max(5, 10), etc.
+                  </p>
+                  
+                  {/* Preview da condição */}
+                  {d.condition?.value1 && d.condition?.value2 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-2">
+                      <div className="text-xs font-medium text-blue-700 mb-1">Preview da condição:</div>
+                      <code className="text-xs text-blue-600">
+                        {(() => {
+                          try {
+                            // Substituir variáveis por valores exemplo para preview
+                            const previewValue1 = d.condition.value1.replace(/<stat:(\d+):value>/g, (_, id) => {
+                              const stat = stats.find(s => s.id === parseInt(id));
+                              if (!stat) return '3';
+                              switch (stat.type) {
+                                case 'numeric': return String(stat.min || 3);
+                                case 'boolean': return '1';
+                                case 'enum': 
+                                  if (Array.isArray(stat.options) && stat.options.length > 0) {
+                                    return String(stat.options[0].value);
+                                  }
+                                  return '2';
+                                default: return '3';
+                              }
+                            });
+                            
+                            const previewValue2 = d.condition.value2.replace(/<stat:(\d+):value>/g, (_, id) => {
+                              const stat = stats.find(s => s.id === parseInt(id));
+                              if (!stat) return '3';
+                              switch (stat.type) {
+                                case 'numeric': return String(stat.max || 5);
+                                case 'boolean': return '0';
+                                case 'enum': 
+                                  if (Array.isArray(stat.options) && stat.options.length > 1) {
+                                    return String(stat.options[1].value);
+                                  }
+                                  return '1';
+                                default: return '5';
+                              }
+                            });
+                            
+                            // Avaliar expressões matemáticas se necessário
+                            let evalValue1: any = previewValue1;
+                            let evalValue2: any = previewValue2;
+                            
+                            try {
+                              if (isNaN(Number(previewValue1)) && previewValue1.includes('(')) {
+                                evalValue1 = String(evaluate(previewValue1));
+                              }
+                            } catch {
+                              evalValue1 = previewValue1;
+                            }
+                            
+                            try {
+                              if (isNaN(Number(previewValue2)) && previewValue2.includes('(')) {
+                                evalValue2 = String(evaluate(previewValue2));
+                              }
+                            } catch {
+                              evalValue2 = previewValue2;
+                            }
+                            
+                            return `${evalValue1} ${d.condition.operator} ${evalValue2}`;
+                          } catch {
+                            return '[Erro na avaliação da condição]';
+                          }
+                        })()}
+                      </code>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {i === dices.length - 1 && !d.condition && (
+                <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <span className="text-lg">🎯</span>
+                    <div>
+                      <div className="font-medium text-sm">Dado Padrão</div>
+                      <div className="text-xs">Este dado será executado se nenhuma condição anterior for válida.</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ))}
+        
+        {/* Editor de Dice Notation Modal */}
+        {showDiceEditor && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-auto bg-background rounded-lg shadow-lg">
+              <div className="p-4 border-b">
+                <h3 className="text-lg font-semibold">Editor de Expressão de Dados</h3>
+                <p className="text-sm text-muted-foreground">
+                  Editar dado {editingDiceIndex + 1}
+                </p>
+              </div>
+              <DiceNotationEditor
+                value={tempExpression}
+                onChange={setTempExpression}
+                stats={stats}
+                onConfirm={confirmDiceExpression}
+              />
+              <div className="p-4 border-t flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowDiceEditor(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// =====================
+// ReplacementEditor - Sistema de substituições baseado nos stats
+// =====================
+function ReplacementEditor({ value, onChange, stats = [], dices = [] }:{ 
+  value: Replacement[] | undefined; 
+  onChange: (v?: Replacement[]) => void;
+  stats?: Stats[];
+  dices?: Dice[];
+}){
+  const replacements = value ?? [];
+  
+  // Função para extrair IDs de stats usados nas expressões de dados
+  const getStatsUsedInDices = (): number[] => {
+    const usedStatIds = new Set<number>();
+    
+    dices.forEach(dice => {
+      if (dice.expression) {
+        // Procurar por <stat:ID:value> na expressão
+        const regex = /<stat:(\d+):value>/g;
+        let match;
+        while ((match = regex.exec(dice.expression)) !== null) {
+          const statId = parseInt(match[1]);
+          usedStatIds.add(statId);
+        }
+      }
+      
+      // Também verificar nas condições
+      if (dice.condition) {
+        const checkConditionValue = (value: string) => {
+          const regex = /<stat:(\d+):value>/g;
+          let match;
+          while ((match = regex.exec(value)) !== null) {
+            const statId = parseInt(match[1]);
+            usedStatIds.add(statId);
+          }
+        };
+        
+        checkConditionValue(dice.condition.value1);
+        checkConditionValue(dice.condition.value2);
+      }
+    });
+    
+    return Array.from(usedStatIds);
+  };
+  
+  // Filtrar stats que podem ser usados como chaves - apenas os que são realmente usados nos dados
+  const usedStatIds = getStatsUsedInDices();
+  const validKeyStats = stats.filter(stat => 
+    usedStatIds.includes(stat.id) &&
+    (stat.type === 'numeric' || 
+     stat.type === 'boolean' || 
+     stat.type === 'enum' || 
+     stat.type === 'calculated')
+  );
+  
+  // Filtrar stats que podem ser opções de substituição (todos não-string)
+  const validOptionStats = stats.filter(stat => 
+    stat.type === 'numeric' || 
+    stat.type === 'boolean' || 
+    stat.type === 'enum' || 
+    stat.type === 'calculated'
+  );
+
+  const add = () => {
+    if (validKeyStats.length === 0) {
+      return; // Não pode adicionar sem stats válidos
+    }
+    
+    const newReplacement: Replacement = { 
+      key: validKeyStats[0].id, 
+      options: [validKeyStats[0].id] // Incluir a própria key por padrão
+    };
+    onChange([...replacements, newReplacement]);
+  };
+  
+  const remove = (i: number) => onChange(replacements.filter((_, idx) => idx !== i));
+  
+  const set = (i: number, patch: Partial<Replacement>) => 
+    onChange(replacements.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+
+  const toggleOption = (replacementIndex: number, statId: number) => {
+    const replacement = replacements[replacementIndex];
+    const currentOptions = replacement.options || [];
+    
+    if (currentOptions.includes(statId)) {
+      // Remover da lista
+      const newOptions = currentOptions.filter(id => id !== statId);
+      set(replacementIndex, { options: newOptions });
+    } else {
+      // Adicionar à lista
+      const newOptions = [...currentOptions, statId];
+      set(replacementIndex, { options: newOptions });
+    }
+  };
+
+  const getStatById = (id: number) => stats.find(s => s.id === id);
+
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <CardTitle className="text-sm flex items-center gap-2">
+          🔄 Sistema de Substituições (Replacements)
+          <Button size="sm" variant="secondary" onClick={add} disabled={validKeyStats.length === 0}>
+            <Plus className="h-4 w-4"/> Adicionar
+          </Button>
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Configure quais stats podem ser substituídos por outros durante as rolagens. 
+          Apenas stats usados nas expressões de dados deste card podem ser configurados como chaves.
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {validKeyStats.length === 0 && usedStatIds.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+            <div className="text-2xl mb-2">🎲</div>
+            <p className="text-sm">Nenhum dado configurado ainda.</p>
+            <p className="text-xs">Configure dados primeiro para poder criar substituições.</p>
+          </div>
+        )}
+        
+        {validKeyStats.length === 0 && usedStatIds.length > 0 && (
+          <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+            <div className="text-2xl mb-2">⚠️</div>
+            <p className="text-sm">Stats usados nos dados não são compatíveis.</p>
+            <p className="text-xs">Apenas stats numéricos, booleanos, enum ou calculados podem ter substituições.</p>
+          </div>
+        )}
+        {replacements.length === 0 && validKeyStats.length > 0 && (
+          <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+            <div className="text-2xl mb-2">🔄</div>
+            <p className="text-sm">Nenhuma substituição configurada.</p>
+            <p className="text-xs">Adicione substituições para permitir trocas de stats nas rolagens.</p>
+          </div>
+        )}
+        
+        {replacements.map((replacement, i) => {
+          const keyStat = getStatById(replacement.key);
+          
+          return (
+            <Card key={i} className="border-dashed">
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="default">Substituição {i + 1}</Badge>
+                    {keyStat && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">🔑</span>
+                        <code className="text-sm bg-muted px-2 py-1 rounded">
+                          {keyStat.emoji && `${keyStat.emoji} `}
+                          {keyStat.name?.default || `Stat ${keyStat.id}`}
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    onClick={() => remove(i)}
+                    title="Remover substituição"
+                  >
+                    <Trash2 className="h-4 w-4"/>
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                
+                {/* Seleção da chave (stat principal) */}
+                <div className="grid gap-2">
+                  <Label className="text-xs">Stat Principal (chave)</Label>
+                  <Select 
+                    value={String(replacement.key)} 
+                    onValueChange={(val) => {
+                      const newKey = parseInt(val);
+                      const currentOptions = replacement.options || [];
+                      
+                      // Garantir que a nova key está nas opções
+                      const newOptions = currentOptions.includes(newKey) 
+                        ? currentOptions 
+                        : [...currentOptions, newKey];
+                      
+                      set(i, { key: newKey, options: newOptions });
+                    }}
+                  >
+                    <SelectTrigger className="text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {validKeyStats.map((stat) => (
+                        <SelectItem key={stat.id} value={String(stat.id)}>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">{stat.type}</Badge>
+                            <span>
+                              {stat.emoji && `${stat.emoji} `}
+                              {stat.name?.default || `Stat ${stat.id}`}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    O stat que poderá ser substituído nas rolagens.
+                  </p>
+                </div>
+
+                {/* Opções de substituição */}
+                <div className="grid gap-2">
+                  <Label className="text-xs">
+                    Opções de Substituição ({(replacement.options || []).length} selecionadas)
+                  </Label>
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    {validOptionStats.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Nenhum stat disponível para substituição.
+                      </p>
+                    ) : (
+                      <div className="space-y-1">
+                        {validOptionStats.map((stat) => {
+                            const isSelected = (replacement.options || []).includes(stat.id);
+                            const isKey = stat.id === replacement.key;
+                            
+                            return (
+                              <div 
+                                key={stat.id}
+                                className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                  isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-muted'
+                                }`}
+                                onClick={() => toggleOption(i, stat.id)}
+                              >
+                                <Checkbox 
+                                  checked={isSelected}
+                                  onChange={() => toggleOption(i, stat.id)}
+                                />
+                                <Badge variant={isKey ? "default" : "secondary"}>{stat.type}</Badge>
+                                <div className="flex-1">
+                                  <div className="font-medium text-sm">
+                                    {stat.emoji && `${stat.emoji} `}
+                                    {stat.name?.default || `Stat ${stat.id}`}
+                                    {isKey && <span className="text-xs text-muted-foreground ml-2">(chave)</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground">
+                    Stats que podem substituir o stat principal. Clique para selecionar/deselecionar.
+                  </p>
+                </div>
+
+                {/* Preview das substituições */}
+                {(replacement.options || []).length > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <div className="text-xs font-medium text-blue-700 mb-2">Preview:</div>
+                    <div className="text-xs text-blue-600">
+                      <strong>{keyStat?.name?.default || `Stat ${replacement.key}`}</strong> pode ser substituído por:{' '}
+                      {(replacement.options || [])
+                        .map(optionId => {
+                          const optionStat = getStatById(optionId);
+                          return optionStat?.name?.default || `Stat ${optionId}`;
+                        })
+                        .join(', ')}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </CardContent>
     </Card>
   );
@@ -1408,7 +2388,12 @@ function BaseStatFields({ stat, onPatch, sections }:{ stat:BaseStat; onPatch:(p:
     </div>
   );
 }
-function StatNumericEditor({ value, onChange, sections }:{ value:StatsNumeric; onChange:(v:StatsNumeric)=>void; sections:Section[] }){ 
+function StatNumericEditor({ value, onChange, sections, allStats = [] }:{ 
+  value:StatsNumeric; 
+  onChange:(v:StatsNumeric)=>void; 
+  sections:Section[];
+  allStats?: Stats[];
+}){ 
   const [showLimits, setShowLimits] = useState<boolean>(
     value.min !== undefined || value.max !== undefined
   );
@@ -1460,6 +2445,9 @@ function StatNumericEditor({ value, onChange, sections }:{ value:StatsNumeric; o
           </div>
         </div>
       )}
+      
+      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })} stats={allStats}/>
+      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })} stats={allStats} dices={value.dices}/>
     </div>
   );
 } 
@@ -1691,12 +2679,26 @@ function StatEnumEditor({ value, onChange, sections, allStats }:{ value:StatsEnu
         </div>
       )}
       
-      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
-      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })}/>
+      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })} stats={allStats}/>
+      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })} stats={allStats} dices={value.dices}/>
     </div>
   );
 }
-function StatBooleanEditor({ value, onChange, sections }:{ value:StatsBoolean; onChange:(v:StatsBoolean)=>void; sections:Section[] }){ const patch=(p:Partial<StatsBoolean>)=>onChange({ ...value, ...p }); return (<div className="grid gap-4"><BaseStatFields stat={value} onPatch={patch} sections={sections}/></div>); }
+function StatBooleanEditor({ value, onChange, sections, allStats = [] }:{ 
+  value:StatsBoolean; 
+  onChange:(v:StatsBoolean)=>void; 
+  sections:Section[];
+  allStats?: Stats[];
+}){ 
+  const patch=(p:Partial<StatsBoolean>)=>onChange({ ...value, ...p }); 
+  return (
+    <div className="grid gap-4">
+      <BaseStatFields stat={value} onPatch={patch} sections={sections}/>
+      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })} stats={allStats}/>
+      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })} stats={allStats} dices={value.dices}/>
+    </div>
+  ); 
+}
 function StatStringEditor({ value, onChange, sections }:{ value:StatsString; onChange:(v:StatsString)=>void; sections:Section[] }){ 
   const [showLimits, setShowLimits] = useState<boolean>(
     value.minLength !== undefined || value.maxLength !== undefined
@@ -1823,8 +2825,8 @@ function StatCalculatedEditor({ value, onChange, sections, allStats }:{ value:St
           Use variáveis como &lt;stat:ID:value&gt; ou abra o editor matemático para uma experiência visual.
         </p>
       </div>
-      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })}/>
-      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })}/>
+      <DiceEditor value={value.dices} onChange={(v)=>patch({ dices:v })} stats={allStats}/>
+      <ReplacementEditor value={value.replacements} onChange={(v)=>patch({ replacements:v })} stats={allStats} dices={value.dices}/>
       
       {/* Editor Matemático Modal */}
       {showMathEditor && (
@@ -1855,9 +2857,9 @@ function StatCalculatedEditor({ value, onChange, sections, allStats }:{ value:St
 function PolymorphicStatEditor({ value, onChange, sections, allStats }:{ value:Stats; onChange:(v:Stats)=>void; sections:Section[]; allStats:Stats[] }){
   return (
     <div className="grid gap-4">
-      {value.type==="numeric" && <StatNumericEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="numeric" && <StatNumericEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
       {value.type==="enum" && <StatEnumEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
-      {value.type==="boolean" && <StatBooleanEditor value={value} onChange={onChange as any} sections={sections}/>} 
+      {value.type==="boolean" && <StatBooleanEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
       {value.type==="string" && <StatStringEditor value={value} onChange={onChange as any} sections={sections}/>} 
       {value.type==="calculated" && <StatCalculatedEditor value={value} onChange={onChange as any} sections={sections} allStats={allStats}/>} 
     </div>
@@ -2049,6 +3051,21 @@ export default function RPGSystemBuilder(){
   };
   const updateStat=(index:number, v:Stats)=>{ const copy=clone(system); copy.stats[index]=v; setSystem(copy); };
   const removeStat=(index:number)=>{ const copy=clone(system); copy.stats.splice(index,1); setSystem(copy); };
+  const duplicateStat=(index:number)=>{ 
+    const copy=clone(system); 
+    const originalStat = copy.stats[index];
+    const newId = nextId(copy.stats);
+    const duplicatedStat = {
+      ...originalStat,
+      id: newId,
+      name: {
+        ...originalStat.name,
+        default: `${originalStat.name?.default || 'Stat'} (Cópia)`
+      }
+    };
+    copy.stats.splice(index + 1, 0, duplicatedStat);
+    setSystem(copy); 
+  };
   const moveStat=(index:number, dir:-1|1)=>{ const copy=clone(system); const j=index+dir; if(j<0||j>=copy.stats.length) return; const tmp=copy.stats[index]; copy.stats[index]=copy.stats[j]; copy.stats[j]=tmp; setSystem(copy); };
 
   const addSection=()=>{ setSystem({ ...system, sections:[ ...system.sections, { id: nextId(system.sections), name:{ default:"Nova Seção" }, quick_edit_btn:false, preview:{ type:"string", content:{ default:"" } }, view_pages:[] } ] }); setSelectedTab("sections"); };
@@ -2100,6 +3117,9 @@ export default function RPGSystemBuilder(){
             {system.stats.map((st,i)=>(
               <Card key={i} className="relative">
                 <div className="flex items-center justify-end gap-1 absolute top-2 right-2 z-10">
+                  <Button size="icon" variant="ghost" onClick={()=>duplicateStat(i)} title="Duplicar stat">
+                    <Copy className="h-4 w-4"/>
+                  </Button>
                   <Button size="icon" variant="ghost" onClick={()=>moveStat(i,-1)} title="Mover para cima">
                     <ChevronUp className="h-4 w-4"/>
                   </Button>

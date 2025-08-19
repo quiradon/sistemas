@@ -1,0 +1,2031 @@
+{
+    "i18n": {
+        "default": {
+            "commands": {
+                "config": {
+                    "label": "D&D 5e",
+                    "description": "RPG system owned by Wizzards"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## Status\n**<emoji_100> <stats_100>** <math_floor(((<value_111>-1) / 4)+2)>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                0
+                            ]
+                        },
+                        {
+                            "value": "## Attributes\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>```",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## Expertises\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## Extra settings\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## Money\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "Strength",
+                "1": "Dexterity",
+                "2": "Constitution",
+                "3": "Intelligence",
+                "4": "Wisdom",
+                "5": "Charisma",
+                "50": "Acrobatics",
+                "51": "Arcana",
+                "52": "Athletics",
+                "53": "Performance",
+                "54": "Deception",
+                "55": "Sleight of Hand",
+                "56": "History",
+                "57": "Intimidation",
+                "58": "Insight",
+                "59": "Investigation",
+                "60": "Animal Handling",
+                "61": "Medicine",
+                "62": "Nature",
+                "63": "Perception",
+                "64": "Persuasion",
+                "65": "Prestidigitation",
+                "66": "Religion",
+                "67": "Survival",
+                "100": "Proficiency bonus",
+                "101": "Health",
+                "102": "Maximum health",
+                "110": "Armor class",
+                "111": "Initiative",
+                "112": "Displacement",
+                "150": "Alert",
+                "151": "Automatic Bonus",
+                "200": "Copper (cp)",
+                "201": "Silver (sp)",
+                "202": "Electrum (ep)",
+                "203": "Gold (gp)",
+                "204": "Platinum (pp)",
+                "205": "Initiative"
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Without ❌"
+                        },
+                        {
+                            "value": 1,
+                            "name": "With ✅ (bonus)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "Specialist ✅ (2x bonus)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Disabled"
+                        },
+                        {
+                            "value": 10,
+                            "name": "Enabled"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Disabled"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Enabled"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "Status",
+                "1": "Attributes",
+                "2": "Expertises",
+                "3": "Extra",
+                "4": "Money"
+            }
+        },
+        "pt-BR": {
+            "commands": {
+                "config": {
+                    "label": "D&D 5e",
+                    "description": "Sistema de RPG pertencente a Wizzards"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## Status\n**<emoji_100> <stats_100>** <math_floor(((<value_111>-1) / 4)+2)>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                0
+                            ]
+                        },
+                        {
+                            "value": "## Atributos\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>\n```",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## Perícias\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## Configurações extras\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## Dinheiro\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "Força",
+                "1": "Destreza",
+                "2": "Constituição",
+                "3": "Inteligência",
+                "4": "Sabedoria",
+                "5": "Carisma",
+                "50": "Acrobacia",
+                "51": "Arcanismo",
+                "52": "Atletismo",
+                "53": "Atuação",
+                "54": "Enganação",
+                "55": "Furtividade",
+                "56": "História",
+                "57": "Intimidação",
+                "58": "Intuição",
+                "59": "Investigação",
+                "60": "Lidar com Animais",
+                "61": "Medicina",
+                "62": "Natureza",
+                "63": "Percepção",
+                "64": "Persuasão",
+                "65": "Prestidigitação",
+                "66": "Religião",
+                "67": "Sobrevivência",
+                "100": "Bônus de proficiência",
+                "101": "Vida",
+                "102": "Vida máxima",
+                "110": "Classe de armadura",
+                "111": "Nível",
+                "112": "Deslocamento",
+                "150": "Alerta",
+                "151": "Bonus Automatizado",
+                "200": "Cobre (cp)",
+                "201": "Prata (sp)",
+                "202": "Electrum (ep)",
+                "203": "Ouro (gp)",
+                "204": "Platina (pp)",
+                "205": "Iniciativa"
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Sem proficiência"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Com proficiência (+ Bônus de proficiência)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "Especialista (+ 2x Bônus de proficiência)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Desativado"
+                        },
+                        {
+                            "value": 10,
+                            "name": "Ativado"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Desativado"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Ativado"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "Status",
+                "1": "Atributos",
+                "2": "Perícias",
+                "3": "Extra",
+                "4": "Dinheiro"
+            }
+        },
+        "es-ES": {
+            "commands": {
+                "config": {
+                    "label": "D&D 5e",
+                    "description": "Sistema de RPG perteneciente a Wizzards"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## Status\n**<emoji_100> <stats_100>** <math_floor(((<value_111>-1) / 4)+2)>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                0
+                            ]
+                        },
+                        {
+                            "value": "## Atributos\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>\n```",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## Pericias\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## Configuraciones extras\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## Dinero\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "Fuerza",
+                "1": "Destreza",
+                "2": "Constitución",
+                "3": "Inteligencia",
+                "4": "Sabiduría",
+                "5": "Carisma",
+                "50": "Acrobacia",
+                "51": "Arcanismo",
+                "52": "Atletismo",
+                "53": "Actuación",
+                "54": "Engaño",
+                "55": "Sigilo",
+                "56": "Historia",
+                "57": "Intimidación",
+                "58": "Intuición",
+                "59": "Investigación",
+                "60": "Manejo de Animales",
+                "61": "Medicina",
+                "62": "Naturaleza",
+                "63": "Percepción",
+                "64": "Persuasión",
+                "65": "Prestidigitación",
+                "66": "Religión",
+                "67": "Supervivencia",
+                "100": "Bono de proficiencia",
+                "101": "Vida",
+                "102": "Vida máxima",
+                "110": "Clase de armadura",
+                "111": "Nivel",
+                "112": "Desplazamiento",
+                "150": "Alerta",
+                "151": "Bonus Automatizado",
+                "200": "Cobre (cp)",
+                "201": "Plata (sp)",
+                "202": "Electrum (ep)",
+                "203": "Oro (gp)",
+                "204": "Platino (pp)",
+                "205": "Iniciativa"
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Sin proficiencia"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Con proficiencia (+ Bono de proficiencia)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "Especialista (+ 2x Bono de proficiencia)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Desactivado"
+                        },
+                        {
+                            "value": 10,
+                            "name": "Activado"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Desactivado"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Activado"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "Status",
+                "1": "Atributos",
+                "2": "Pericias",
+                "3": "Extra",
+                "4": "Dinero"
+            }
+        },
+        "ru": {
+            "commands": {
+                "config": {
+                    "label": "Д",
+                    "description": "Ролевая система, принадлежащая Wizzards"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## Статус\n**<emoji_100> <stats_100>** <math_floor(((<value_111>-1) / 4)+2)>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## Атрибуты\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>```",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## Экспертные знания\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## Дополнительные настройки\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## Деньги\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "Сила",
+                "1": "Ловкость",
+                "2": "Конституция",
+                "3": "Интеллект",
+                "4": "Мудрость",
+                "5": "Харизма",
+                "50": "Акробатика",
+                "51": "Арканы",
+                "52": "легкая атлетика",
+                "53": "Производительность",
+                "54": "Обман",
+                "55": "Ловкость рук",
+                "56": "История",
+                "57": "Запугивание",
+                "58": "Понимание",
+                "59": "Расследование",
+                "60": "Обращение с животными",
+                "61": "Лекарство",
+                "62": "Природа",
+                "63": "Восприятие",
+                "64": "Убеждение",
+                "65": "Престидигитация",
+                "66": "Религия",
+                "67": "Выживание",
+                "100": "Бонус мастерства",
+                "101": "Здоровье",
+                "102": "Максимальное здоровье",
+                "110": "Класс брони",
+                "111": "Инициатива",
+                "112": "Перемещение",
+                "150": "Оповещение",
+                "151": "Автоматизированный бонус",
+                "200": "Медь (cp)",
+                "201": "Серебро (sp)",
+                "202": "Электрум (ep)",
+                "203": "Золото (gp)",
+                "204": "Платина (pp)",
+                "205": "Инициатива"
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Без навыков"
+                        },
+                        {
+                            "value": 1,
+                            "name": "С мастерством (бонус мастерства)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "Специалист (2x бонус мастерства)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Отключено"
+                        },
+                        {
+                            "value": 10,
+                            "name": "Включено"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Отключено"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Включено"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "Статус",
+                "1": "Атрибуты",
+                "2": "Экспертные знания",
+                "3": "Дополнительно",
+                "4": "Деньги"
+            }
+        },
+        "jp": {
+            "commands": {
+                "config": {
+                    "label": "D&D 5e",
+                    "description": "ウィザード社が所有するRPGシステム"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## ステータス\n**<emoji_100> <stats_100>** <strvalue_100>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                0
+                            ]
+                        },
+                        {
+                            "value": "## アトリビュート\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>```",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## 専門技能\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## その他の設定\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## お金\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "筋力",
+                "1": "敏捷",
+                "2": "体力",
+                "3": "知力",
+                "4": "知覚",
+                "5": "魅力",
+                "50": "器用さ",
+                "51": "魔術",
+                "52": "運動",
+                "53": "演技",
+                "54": "欺瞞",
+                "55": "手先の早業",
+                "56": "歴史",
+                "57": "脅迫",
+                "58": "洞察",
+                "59": "調査",
+                "60": "動物扱いやり方",
+                "61": "医学",
+                "62": "自然",
+                "63": "知覚",
+                "64": "説得",
+                "65": "手品",
+                "66": "宗教",
+                "67": "生存",
+                "100": "プロフィシェンシーボーナス",
+                "101": "ヒットポイント",
+                "102": "最大ヒットポイント",
+                "110": "AC",
+                "111": "先制攻撃",
+                "112": "移動速度",
+                "150": "警戒",
+                "151": "自動ボーナス",
+                "200": "銅貨 (cp)",
+                "201": "銀貨 (sp)",
+                "202": "エレクトラム (ep)",
+                "203": "金貨 (gp)",
+                "204": "白金貨 (pp)",
+                "205": "イニシアチブ"
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "なし"
+                        },
+                        {
+                            "value": 1,
+                            "name": "あり (+ プロフィシェンシーボーナス)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "専門 (+ 2x プロフィシェンシーボーナス)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "無効"
+                        },
+                        {
+                            "value": 10,
+                            "name": "有効"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "無効"
+                        },
+                        {
+                            "value": 1,
+                            "name": "有効"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "ステータス",
+                "1": "アトリビュート",
+                "2": "専門技能",
+                "3": "その他",
+                "4": "お金"
+            }
+        },
+        "fr": {
+            "commands": {
+                "config": {
+                    "label": "D&D 5e",
+                    "description": "Système de jeu de rôle détenu par Wizards"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## Statut\n**<emoji_100> <stats_100>** <math_floor(((<value_111>-1) / 4)+2)>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                0
+                            ]
+                        },
+                        {
+                            "value": "## Attributs\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>```",
+                            "forMenu": [
+                                -1,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## Compétences\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## Réglages supplémentaires\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## Argent\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "Force",
+                "1": "Dextérité",
+                "2": "Constitution",
+                "3": "Intelligence",
+                "4": "Sagesse",
+                "5": "Charisme",
+                "50": "Acrobaties",
+                "51": "Arcanes",
+                "52": "Athlétisme",
+                "53": "Représentation",
+                "54": "Tromperie",
+                "55": "Escamotage",
+                "56": "Histoire",
+                "57": "Intimidation",
+                "58": "Intuition",
+                "59": "Investigation",
+                "60": "Dressage",
+                "61": "Médecine",
+                "62": "Nature",
+                "63": "Perception",
+                "64": "Persuasion",
+                "65": "Prestidigitation",
+                "66": "Religion",
+                "67": "Survie",
+                "100": "Bonus de maîtrise",
+                "101": "Santé",
+                "102": "Santé maximale",
+                "110": "Classe d’armure",
+                "111": "Initiative",
+                "112": "Déplacement",
+                "150": "Alerte",
+                "151": "Bonus automatique",
+                "200": "Cuivre (pc)",
+                "201": "Argent (pa)",
+                "202": "Électrum (pe)",
+                "203": "Or (po)",
+                "204": "Platine (pp)",
+                "205": "Iniciative"
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Sans ❌"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Avec ✅ (bonus)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "Spécialiste ✅ (2x bonus)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Désactivé"
+                        },
+                        {
+                            "value": 10,
+                            "name": "Activé"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "Désactivé"
+                        },
+                        {
+                            "value": 1,
+                            "name": "Activé"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "Statut",
+                "1": "Attributs",
+                "2": "Compétences",
+                "3": "Supplémentaire",
+                "4": "Argent"
+            }
+        },
+        "ko": {
+            "commands": {
+                "config": {
+                    "label": "D&D 5e",
+                    "description": "Wizzards 소유의 RPG 시스템"
+                },
+                "ficha": {
+                    "fields": [
+                        {
+                            "value": "## 상태\n**<emoji_100> <stats_100>** <math_floor(((<value_111>-1) / 4)+2)>\n**<emoji_110> <stats_110>** <strvalue_110>\n**<emoji_111> <stats_111>** <strvalue_111>\n**<emoji_112> <stats_112>** <strvalue_112>\n**<emoji_101> <stats_101>** <strvalue_101>/<strvalue_102>",
+                            "forMenu": [
+                                -1,
+                                0,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## 능력치\n```css\n<stats_0>: <strvalue_0>\n<stats_1>: <strvalue_1>\n<stats_2>: <strvalue_2>\n<stats_3>: <strvalue_3>\n<stats_4>: <strvalue_4>\n<stats_5>: <strvalue_5>```",
+                            "forMenu": [
+                                -1,
+                                0,
+                                1
+                            ]
+                        },
+                        {
+                            "value": "## 숙련\n```css\n<stats_50>: <strvalue_50>\n<stats_51>: <strvalue_51>\n<stats_52>: <strvalue_52>\n<stats_53>: <strvalue_53>\n<stats_54>: <strvalue_54>\n<stats_55>: <strvalue_55>\n<stats_56>: <strvalue_56>\n<stats_57>: <strvalue_57>\n<stats_58>: <strvalue_58>\n<stats_59>: <strvalue_59>\n<stats_60>: <strvalue_60>\n<stats_61>: <strvalue_61>\n<stats_62>: <strvalue_62>\n<stats_63>: <strvalue_63>\n<stats_64>: <strvalue_64>\n<stats_65>: <strvalue_65>\n<stats_66>: <strvalue_66>\n<stats_67>: <strvalue_67>\n```",
+                            "forMenu": [
+                                2
+                            ]
+                        },
+                        {
+                            "value": "## 추가 설정\n```css\n<stats_150>: <strvalue_150>\n<stats_151>: <strvalue_151>\n```",
+                            "forMenu": [
+                                3
+                            ]
+                        },
+                        {
+                            "value": "## 돈\n```css\n<stats_200>: <strvalue_200>\n<stats_201>: <strvalue_201>\n<stats_202>: <strvalue_202>\n<stats_203>: <strvalue_203>\n<stats_204>: <strvalue_204>\n```",
+                            "forMenu": [
+                                4
+                            ]
+                        }
+                    ]
+                }
+            },
+            "stats": {
+                "0": "힘",
+                "1": "민첩성",
+                "2": "건강",
+                "3": "지능",
+                "4": "지혜",
+                "5": "매력",
+                "50": "곡예",
+                "51": "신비학",
+                "52": "운동",
+                "53": "공연",
+                "54": "기만",
+                "55": "손재주",
+                "56": "역사",
+                "57": "협박",
+                "58": "통찰력",
+                "59": "조사",
+                "60": "동물 조련",
+                "61": "의술",
+                "62": "자연",
+                "63": "인지",
+                "64": "설득",
+                "65": "요술",
+                "66": "종교",
+                "67": "생존",
+                "100": "숙련 보너스",
+                "101": "체력",
+                "102": "최대 체력",
+                "110": "방어구 등급",
+                "111": "선제권",
+                "112": "변위",
+                "150": "경계",
+                "151": "자동 보너스",
+                "200": "구리 (cp)",
+                "201": "은 (sp)",
+                "202": "일렉트럼 (ep)",
+                "203": "금 (gp)",
+                "204": "플래티넘 (pp)",
+                "205": ""
+            },
+            "enums": [
+                {
+                    "for": [
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57,
+                        58,
+                        59,
+                        60,
+                        61,
+                        62,
+                        63,
+                        64,
+                        65,
+                        66,
+                        67
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "없음 ❌"
+                        },
+                        {
+                            "value": 1,
+                            "name": "있음 ✅ (보너스)"
+                        },
+                        {
+                            "value": 2,
+                            "name": "전문가 ✅ (2배 보너스)"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        150
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "비활성화됨"
+                        },
+                        {
+                            "value": 10,
+                            "name": "활성화됨"
+                        }
+                    ]
+                },
+                {
+                    "for": [
+                        151
+                    ],
+                    "enum": [
+                        {
+                            "value": 0,
+                            "name": "비활성화됨 "
+                        },
+                        {
+                            "value": 1,
+                            "name": "활성화됨"
+                        }
+                    ]
+                }
+            ],
+            "menu": {
+                "0": "상태",
+                "1": "능력치",
+                "2": "숙련",
+                "3": "추가",
+                "4": "돈"
+            }
+        }
+    },
+    "commands": {
+        "config": {
+            "emoji": "<:SystemDnD:1282444126586933271>",
+            "value": 1
+        },
+        "menu": {
+            "0": {
+                "style": 2,
+                "emoji": "1310967883446353920"
+            },
+            "1": {
+                "style": 2,
+                "emoji": "1310967834331054090"
+            },
+            "2": {
+                "style": 2,
+                "emoji": "1310967777003307029"
+            },
+            "3": {
+                "style": 2,
+                "emoji": "1327212124967145494"
+            },
+            "4": {
+                "style": 2,
+                "emoji": "🪙"
+            }
+        }
+    },
+    "integrations": {
+        "initiative": {
+            "id": 205
+        },
+        "atributes_roll": "6#4d6k3"
+    },
+    "stats": [
+        {
+            "id": 200,
+            "emoji": "🪙",
+            "canHoldValue": true,
+            "menu": 4
+        },
+        {
+            "id": 201,
+            "emoji": "🪙",
+            "canHoldValue": true,
+            "menu": 4
+        },
+        {
+            "id": 202,
+            "emoji": "🪙",
+            "canHoldValue": true,
+            "menu": 4
+        },
+        {
+            "id": 203,
+            "emoji": "🪙",
+            "canHoldValue": true,
+            "menu": 4
+        },
+        {
+            "id": 204,
+            "emoji": "🪙",
+            "canHoldValue": true,
+            "menu": 4
+        },
+        {
+            "id": 205,
+            "emoji": "📯",
+            "canHoldValue": false,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_1>-(10*<value_151>))/2^<value_151>)>+<math_<value_150>/2>"
+                }
+            ]
+        },
+        {
+            "id": 150,
+            "emoji": "👀",
+            "canHoldValue": true,
+            "menu": 3,
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "1357831864718589992"
+                },
+                {
+                    "value": 10,
+                    "emoji": "1357831846561321091"
+                }
+            ]
+        },
+        {
+            "id": 151,
+            "emoji": "⚔️",
+            "canHoldValue": true,
+            "menu": 3,
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "1357831864718589992"
+                },
+                {
+                    "value": 1,
+                    "emoji": "1357831846561321091"
+                }
+            ]
+        },
+        {
+            "id": 101,
+            "emoji": "❤️",
+            "canHoldValue": true,
+            "menu": 0
+        },
+        {
+            "id": 102,
+            "emoji": "💖",
+            "canHoldValue": true,
+            "menu": 0
+        },
+        {
+            "id": 100,
+            "emoji": "🎯",
+            "menu": 0,
+            "canHoldValue": false
+        },
+        {
+            "id": 110,
+            "emoji": "🛡️",
+            "menu": 0,
+            "canHoldValue": true
+        },
+        {
+            "id": 111,
+            "emoji": "💫",
+            "menu": 0,
+            "canHoldValue": true
+        },
+        {
+            "id": 112,
+            "emoji": "🥾",
+            "menu": 0,
+            "canHoldValue": true
+        },
+        {
+            "id": 0,
+            "emoji": "💪",
+            "menu": 1,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_0>-(10*<value_151>))/2^<value_151>)>"
+                }
+            ]
+        },
+        {
+            "id": 1,
+            "emoji": "⚡",
+            "menu": 1,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_1>-(10*<value_151>))/2^<value_151>)>"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "emoji": "🛡️",
+            "menu": 1,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_2>-(10*<value_151>))/2^<value_151>)>"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "emoji": "🧠",
+            "menu": 1,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_3>-(10*<value_151>))/2^<value_151>)>"
+                }
+            ]
+        },
+        {
+            "id": 4,
+            "emoji": "📜",
+            "menu": 1,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_4>-(10*<value_151>))/2^<value_151>)>"
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "emoji": "🎭",
+            "menu": 1,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_5>-(10*<value_151>))/2^<value_151>)>"
+                }
+            ]
+        },
+        {
+            "id": 50,
+            "emoji": "⚡",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_1>-(10*<value_151>))/2^<value_151>)>+(<math_<value_50>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 1,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 51,
+            "emoji": "🧠",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_3>-(10*<value_151>))/2^<value_151>)>+(<math_<value_51>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 3,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 52,
+            "emoji": "💪",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_0>-(10*<value_151>))/2^<value_151>)>+(<math_<value_52>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 0,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 53,
+            "emoji": "🎭",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_5>-(10*<value_151>))/2^<value_151>)>+(<math_<value_53>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 5,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 54,
+            "emoji": "🎭",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_5>-(10*<value_151>))/2^<value_151>)>+(<math_<value_54>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 5,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 55,
+            "emoji": "⚡",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_1>-(10*<value_151>))/2^<value_151>)>+(<math_<value_55>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 1,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 56,
+            "emoji": "🧠",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_3>-(10*<value_151>))/2^<value_151>)>+(<math_<value_56>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 3,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 57,
+            "emoji": "🎭",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_5>-(10*<value_151>))/2^<value_151>)>+(<math_<value_57>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 5,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 58,
+            "emoji": "📜",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_4>-(10*<value_151>))/2^<value_151>)>+(<math_<value_58>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 4,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 59,
+            "emoji": "🧠",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_3>-(10*<value_151>))/2^<value_151>)>+(<math_<value_59>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 3,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 60,
+            "emoji": "📜",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_4>-(10*<value_151>))/2^<value_151>)>+(<math_<value_60>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 4,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 61,
+            "emoji": "📜",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_4>-(10*<value_151>))/2^<value_151>)>+(<math_<value_61>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 4,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 62,
+            "emoji": "🧠",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_3>-(10*<value_151>))/2^<value_151>)>+(<math_<value_62>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 3,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 63,
+            "emoji": "📜",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_4>-(10*<value_151>))/2^<value_151>)>+(<math_<value_63>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 4,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 64,
+            "emoji": "🎭",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_5>-(10*<value_151>))/2^<value_151>)>+(<math_<value_64>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 5,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 65,
+            "emoji": "⚡",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_1>-(10*<value_151>))/2^<value_151>)>+(<math_<value_65>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 1,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 66,
+            "emoji": "🧠",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_3>-(10*<value_151>))/2^<value_151>)>+(<math_<value_66>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 3,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        },
+        {
+            "id": 67,
+            "emoji": "📜",
+            "menu": 2,
+            "canHoldValue": true,
+            "dices": [
+                {
+                    "dice": "d20+<math_floor((<value_4>-(10*<value_151>))/2^<value_151>)>+(<math_<value_67>*(floor(((<value_111>-1) / 4)+2))>)"
+                }
+            ],
+            "enum": [
+                {
+                    "value": 0,
+                    "emoji": "🚫"
+                },
+                {
+                    "value": 1,
+                    "emoji": "🎯"
+                },
+                {
+                    "value": 2,
+                    "emoji": "☑️"
+                }
+            ],
+            "replacements": [
+                {
+                    "id": 4,
+                    "menu": 2,
+                    "replacedBy": [
+                        0,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            ]
+        }
+    ]
+}
