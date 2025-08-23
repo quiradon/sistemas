@@ -5,6 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { X } from "lucide-react";
 import { evaluate } from "mathjs";
 
 // Types - definição compatível com o editor principal
@@ -32,6 +34,7 @@ const MathExpressionEditor: React.FC<MathExpressionEditorProps> = ({
 }) => {
   const [expression, setExpression] = useState(value);
   const [showVariables, setShowVariables] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Filtrar apenas stats que podem ser usados em cálculos (não string)
@@ -42,6 +45,20 @@ const MathExpressionEditor: React.FC<MathExpressionEditorProps> = ({
       stat.type === "enum" ||
       stat.type === "calculated"
   );
+
+  // Filtrar stats baseado na busca
+  const filteredStats = mathCompatibleStats.filter(stat => {
+    if (!searchFilter.trim()) return true;
+    
+    const searchTerm = searchFilter.toLowerCase();
+    const statName = (stat.name?.default || '').toLowerCase();
+    const statType = stat.type.toLowerCase();
+    const statId = stat.id.toString();
+    
+    return statName.includes(searchTerm) || 
+           statType.includes(searchTerm) || 
+           statId.includes(searchTerm);
+  });
 
   const insertVariable = (statId: number) => {
     const variableText = `<stat:${statId}:value>`;
@@ -216,7 +233,9 @@ const MathExpressionEditor: React.FC<MathExpressionEditorProps> = ({
         {/* Variáveis disponíveis */}
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
-            <Label>Variáveis (Não-String)</Label>
+            <Label>
+              Variáveis ({mathCompatibleStats.length} disponíveis{searchFilter ? ` • ${filteredStats.length} exibidos` : ''})
+            </Label>
             <Button
               variant="outline"
               size="sm"
@@ -228,14 +247,39 @@ const MathExpressionEditor: React.FC<MathExpressionEditorProps> = ({
           </div>
 
           {showVariables && (
-            <ScrollArea className="h-32 border rounded-md p-2">
-              {mathCompatibleStats.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Nenhuma variável compatível encontrada.
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {mathCompatibleStats.map((stat) => (
+            <div className="space-y-2">
+              {/* Campo de busca */}
+              <div className="relative">
+                <Input
+                  placeholder="Buscar variáveis por nome, tipo ou ID..."
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  className="text-xs"
+                />
+                {searchFilter && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="absolute right-1 top-1 h-6 w-6"
+                    onClick={() => setSearchFilter("")}
+                    title="Limpar busca"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              
+              <ScrollArea className="h-32 border rounded-md p-2">
+                {filteredStats.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    {searchFilter ? 
+                      `Nenhuma variável encontrada para "${searchFilter}"` :
+                      "Nenhuma variável compatível encontrada."
+                    }
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {filteredStats.map((stat) => (
                     <Button
                       key={stat.id}
                       variant="ghost"
@@ -260,6 +304,7 @@ const MathExpressionEditor: React.FC<MathExpressionEditorProps> = ({
                 </div>
               )}
             </ScrollArea>
+            </div>
           )}
         </div>
 

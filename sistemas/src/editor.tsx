@@ -17,6 +17,7 @@ import {
   ListOrdered,
   Quote,
   Code,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +40,11 @@ import { evaluate } from "mathjs";
 import { DiceRoll } from '@dice-roller/rpg-dice-roller';
 import MathExpressionEditor from "@/components/unique/MathExpressionEditor";
 import DiceNotationEditor from "@/components/unique/DiceNotationEditor";
+import ConfigTab from "@/components/unique/ConfigTab";
+import StatsTab from "@/components/unique/StatsTab";
+import SectionsTab from "@/components/unique/SectionsTab";
+import PreviewTab from "@/components/unique/PreviewTab";
+import IntegrationsTab from "@/components/unique/IntegrationsTab";
 
 // =====================
 // Types
@@ -72,6 +78,7 @@ export interface RPGSystem {
   config: { id: number; name: LabelLocalization; description: Localization<string>; };
   stats: Stats[];
   sections: Section[];
+  integrations?: Integrations;
 }
 
 interface Section {
@@ -84,6 +91,40 @@ interface Section {
 }
 
 interface Dice { expression: string; condition?: { value1: string; operator: "<"|">"|"<="|">="|"=="|"!="; value2: string; }; }
+
+// =====================
+// Integration Types
+// =====================
+interface Integrations {
+  iniciative?: {
+    id: string;
+  };
+  atributes_roll?: string;
+  schemas: NexusSchemas[];
+  autorized_status_ids?: number[]
+}
+
+interface NexusSchemas {
+  id: number;
+  name: LabelLocalization;
+  description: Localization<string>;
+  fields?: {
+    [key: number]: SchemaEval;
+  };
+  AutorizedModifierList: any[];
+  authorized_status_ids: number[];
+}
+
+interface SchemaEval {
+  name: LabelString;
+  type: "eval";
+  options: SchemaOption[];
+}
+
+interface SchemaOption {
+  value: string;
+  label: LabelString;
+}
 
 // =====================
 // Helpers
@@ -1582,6 +1623,7 @@ function ReplacementEditor({ value, onChange, stats = [], dices = [] }:{
   dices?: Dice[];
 }){
   const replacements = value ?? [];
+  const [searchFilter, setSearchFilter] = useState("");
   
   // Função para extrair IDs de stats usados nas expressões de dados
   const getStatsUsedInDices = (): number[] => {
@@ -1634,6 +1676,20 @@ function ReplacementEditor({ value, onChange, stats = [], dices = [] }:{
     stat.type === 'enum' || 
     stat.type === 'calculated'
   );
+
+  // Filtrar stats baseado na busca
+  const filteredValidOptionStats = validOptionStats.filter(stat => {
+    if (!searchFilter.trim()) return true;
+    
+    const searchTerm = searchFilter.toLowerCase();
+    const statName = (stat.name?.default || '').toLowerCase();
+    const statType = stat.type.toLowerCase();
+    const statId = stat.id.toString();
+    
+    return statName.includes(searchTerm) || 
+           statType.includes(searchTerm) || 
+           statId.includes(searchTerm);
+  });
 
   const add = () => {
     if (validKeyStats.length === 0) {
@@ -1780,16 +1836,41 @@ function ReplacementEditor({ value, onChange, stats = [], dices = [] }:{
                 {/* Opções de substituição */}
                 <div className="grid gap-2">
                   <Label className="text-xs">
-                    Opções de Substituição ({(replacement.options || []).length} selecionadas)
+                    Opções de Substituição ({(replacement.options || []).length} selecionadas{searchFilter ? ` • ${filteredValidOptionStats.length} de ${validOptionStats.length} exibidos` : ''})
                   </Label>
+                  
+                  {/* Campo de busca */}
+                  <div className="relative">
+                    <Input
+                      placeholder="Buscar stats por nome, tipo ou ID..."
+                      value={searchFilter}
+                      onChange={(e) => setSearchFilter(e.target.value)}
+                      className="text-xs"
+                    />
+                    {searchFilter && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="absolute right-1 top-1 h-6 w-6"
+                        onClick={() => setSearchFilter("")}
+                        title="Limpar busca"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                  
                   <ScrollArea className="h-32 border rounded-md p-2">
-                    {validOptionStats.length === 0 ? (
+                    {filteredValidOptionStats.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-4">
-                        Nenhum stat disponível para substituição.
+                        {searchFilter ? 
+                          `Nenhum stat encontrado para "${searchFilter}"` :
+                          "Nenhum stat disponível para substituição."
+                        }
                       </p>
                     ) : (
                       <div className="space-y-1">
-                        {validOptionStats.map((stat) => {
+                        {filteredValidOptionStats.map((stat) => {
                             const isSelected = (replacement.options || []).includes(stat.id);
                             const isKey = stat.id === replacement.key;
                             
@@ -2417,22 +2498,6 @@ function SectionEditor({ value, onChange, sections, stats = [] }:{ value:Section
 }
 
 // =====================
-// Config Editor
-// =====================
-function ConfigEditor({ value, onChange }:{ value:RPGSystem["config"]; onChange:(v:RPGSystem["config"])=>void }){
-  const patch=(p:Partial<RPGSystem["config"]>)=>onChange({ ...value, ...p });
-  return (
-    <Card>
-      <CardHeader><CardTitle>Configuração do Sistema</CardTitle></CardHeader>
-      <CardContent className="grid gap-4">
-        <LabelLocalizationEditor label="Nome (localizado)" value={value.name} onChange={(v)=>patch({ name:v } as any)} />
-        <CompactTextLocalizationEditor label="Descrição" value={value.description} onChange={(v)=>patch({ description:v })} placeholder="Breve resumo do sistema" />
-      </CardContent>
-    </Card>
-  );
-}
-
-// =====================
 // Validators
 // =====================
 function validate(system:RPGSystem): string[] {
@@ -2510,6 +2575,9 @@ export default function RPGSystemBuilder(){
       { id: 1, name: { default: "Resumo" }, quick_edit_btn: true, preview: { type: "string", content: { default: "Um **pequeno** resumo do personagem." } }, view_pages: [1] },
       { id: 2, name: { default: "Atributos" }, quick_edit_btn: true, preview: { type: "string", content: { default: "Lista de atributos..." } }, view_pages: [1,2] },
     ],
+    integrations: {
+      schemas: []
+    },
   });
   const [selectedTab, setSelectedTab] = useState<string>("config");
   const errors = useMemo(()=>validate(system),[system]);
@@ -2547,6 +2615,7 @@ export default function RPGSystemBuilder(){
   const addSection=()=>{ setSystem({ ...system, sections:[ ...system.sections, { id: nextId(system.sections), name:{ default:"Nova Seção" }, quick_edit_btn:false, preview:{ type:"string", content:{ default:"" } }, view_pages:[] } ] }); setSelectedTab("sections"); };
   const updateSection=(index:number,v:Section)=>{ const copy=clone(system); copy.sections[index]=v; setSystem(copy); };
   const removeSection=(index:number)=>{ const copy=clone(system); copy.sections.splice(index,1); setSystem(copy); };
+  const moveSection=(index:number, dir:-1|1)=>{ const copy=clone(system); const j=index+dir; if(j<0||j>=copy.sections.length) return; const tmp=copy.sections[index]; copy.sections[index]=copy.sections[j]; copy.sections[j]=tmp; setSystem(copy); };
 
   const exportJson=()=>{ const text=JSON.stringify(system, null, 2); download(`rpg-system-${system.config.name.default || system.config.id}.json`, text); };
   const fileRef = useRef<HTMLInputElement|null>(null);
@@ -2576,74 +2645,58 @@ export default function RPGSystemBuilder(){
           <TabsTrigger value="config">Config</TabsTrigger>
           <TabsTrigger value="stats">Stats</TabsTrigger>
           <TabsTrigger value="sections">Seções</TabsTrigger>
+          <TabsTrigger value="integrations">Integrações</TabsTrigger>
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="config" className="mt-4"><ConfigEditor value={system.config} onChange={(v)=>setSystem({ ...system, config:v })} /></TabsContent>
+        <TabsContent value="config" className="mt-4">
+          <ConfigTab
+            value={system.config}
+            onChange={(v) => setSystem({ ...system, config: v })}
+            LabelLocalizationEditor={LabelLocalizationEditor}
+            CompactTextLocalizationEditor={CompactTextLocalizationEditor}
+          />
+        </TabsContent>
 
         <TabsContent value="stats" className="mt-4">
-          <div className="flex flex-wrap gap-2 mb-3">
-            <Button size="sm" variant="secondary" onClick={()=>addStat("numeric")}>+ Numeric</Button>
-            <Button size="sm" variant="secondary" onClick={()=>addStat("enum")}>+ Enum</Button>
-            <Button size="sm" variant="secondary" onClick={()=>addStat("boolean")}>+ Boolean</Button>
-            <Button size="sm" variant="secondary" onClick={()=>addStat("string")}>+ String</Button>
-            <Button size="sm" variant="secondary" onClick={()=>addStat("calculated")}>+ Calculated</Button>
-          </div>
-          <div className="grid gap-4">
-            {system.stats.map((st,i)=>(
-              <Card key={i} className="relative">
-                <div className="flex items-center justify-end gap-1 absolute top-2 right-2 z-10">
-                  <Button size="icon" variant="ghost" onClick={()=>duplicateStat(i)} title="Duplicar stat">
-                    <Copy className="h-4 w-4"/>
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={()=>moveStat(i,-1)} title="Mover para cima">
-                    <ChevronUp className="h-4 w-4"/>
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={()=>moveStat(i,+1)} title="Mover para baixo">
-                    <ChevronDown className="h-4 w-4"/>
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={()=>removeStat(i)} title="Remover stat">
-                    <Trash2 className="h-4 w-4"/>
-                  </Button>
-                </div>
-                <Collapsible defaultOpen={false}>
-                  <CollapsibleTrigger className="w-full text-left">
-                    <CardHeader className="py-3 pr-32">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <Badge variant="secondary">{st.type}</Badge>
-                        <span>{st.name?.default || `Stat ${i+1}`}</span>
-                        <ChevronRight className="h-4 w-4 transition-transform duration-200 ui-state-open:rotate-90" />
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent><PolymorphicStatEditor value={st} onChange={(v)=>updateStat(i,v)} sections={system.sections} allStats={system.stats}/></CardContent>
-                  </CollapsibleContent>
-                </Collapsible>
-              </Card>
-            ))}
-          </div>
+          <StatsTab
+            stats={system.stats as any}
+            sections={system.sections as any}
+            onAddStat={addStat}
+            onUpdateStat={updateStat}
+            onRemoveStat={removeStat}
+            onDuplicateStat={duplicateStat}
+            onMoveStat={moveStat}
+            PolymorphicStatEditor={PolymorphicStatEditor as any}
+          />
         </TabsContent>
 
         <TabsContent value="sections" className="mt-4">
-          <div className="mb-3"><Button size="sm" variant="secondary" onClick={addSection}>+ Adicionar Seção</Button></div>
-          <div className="grid gap-4">
-            {system.sections.map((sec,i)=>(
-              <Card key={i}><CardHeader className="py-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2"><Badge variant="secondary">Seção</Badge><span>{sec.name?.default || `Seção ${i+1}`}</span></CardTitle>
-                  <div className="flex items-center gap-1"><Button size="icon" variant="ghost" onClick={()=>removeSection(i)}><Trash2 className="h-4 w-4"/></Button></div>
-                </div>
-              </CardHeader>
-              <CardContent><SectionEditor value={sec} onChange={(v)=>updateSection(i,v)} sections={system.sections} stats={system.stats} /></CardContent></Card>
-            ))}
-          </div>
+          <SectionsTab
+            sections={system.sections as any}
+            stats={system.stats as any}
+            onAddSection={addSection}
+            onUpdateSection={updateSection}
+            onRemoveSection={removeSection}
+            onMoveSection={moveSection}
+            SectionEditor={SectionEditor as any}
+          />
+        </TabsContent>
+
+        <TabsContent value="integrations" className="mt-4">
+          <IntegrationsTab
+            integrations={system.integrations}
+            stats={system.stats}
+            onUpdateIntegrations={(integrations) => setSystem({ ...system, integrations })}
+            LabelLocalizationEditor={LabelLocalizationEditor}
+            CompactTextLocalizationEditor={CompactTextLocalizationEditor}
+            MathExpressionEditor={MathExpressionEditor}
+            DiceNotationEditor={DiceNotationEditor}
+          />
         </TabsContent>
 
         <TabsContent value="preview" className="mt-4">
-          <Card><CardHeader className="py-3"><CardTitle className="text-sm">JSON</CardTitle></CardHeader>
-            <CardContent><pre className="text-xs overflow-auto bg-muted p-3 rounded-xl max-h-[60vh]">{JSON.stringify(system, null, 2)}</pre></CardContent>
-          </Card>
+          <PreviewTab system={system as any} />
         </TabsContent>
       </Tabs>
 
