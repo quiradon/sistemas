@@ -470,6 +470,76 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
   // Filtrar itens do nível atual
   const getFilteredItems = () => {
     const currentLevel = getCurrentLevel();
+    
+    // Se há filtro, fazer busca global nos stats
+    if (variableFilter !== "" && currentPath.length === 0) {
+      const globalResults: Array<[string, any]> = [];
+      
+      // Buscar em todos os stats
+      stats.forEach(stat => {
+        const statName = (stat.name?.default || `Stat ${stat.id}`).toLowerCase();
+        const filter = variableFilter.toLowerCase();
+        
+        if (statName.includes(filter) || stat.id.toString().includes(filter)) {
+          // Adicionar todas as propriedades do stat que matched
+          globalResults.push([`stat-${stat.id}-name`, {
+            label: `📊 ${stat.name?.default || `Stat ${stat.id}`} → Nome`,
+            value: `<stat:${stat.id}:name>`,
+            icon: "🏷️"
+          }]);
+          globalResults.push([`stat-${stat.id}-value`, {
+            label: `📊 ${stat.name?.default || `Stat ${stat.id}`} → Valor`,
+            value: `<stat:${stat.id}:value>`,
+            icon: "🔢"
+          }]);
+          globalResults.push([`stat-${stat.id}-emoji`, {
+            label: `📊 ${stat.name?.default || `Stat ${stat.id}`} → Emoji`,
+            value: `<stat:${stat.id}:emoji>`,
+            icon: "😀"
+          }]);
+        }
+      });
+      
+      // Buscar em todas as seções
+      sections.forEach(section => {
+        const sectionName = (section.name?.default || `Seção ${section.id}`).toLowerCase();
+        const filter = variableFilter.toLowerCase();
+        
+        if (sectionName.includes(filter) || section.id.toString().includes(filter)) {
+          globalResults.push([`section-${section.id}-name`, {
+            label: `📄 ${section.name?.default || `Seção ${section.id}`} → Nome`,
+            value: `<section:${section.id}:name>`,
+            icon: "🏷️"
+          }]);
+          globalResults.push([`section-${section.id}-emoji`, {
+            label: `📄 ${section.name?.default || `Seção ${section.id}`} → Emoji`,
+            value: `<section:${section.id}:emoji>`,
+            icon: "😀"
+          }]);
+        }
+      });
+      
+      // Buscar em expressões matemáticas e dados
+      if ("math".includes(variableFilter.toLowerCase()) || "matematica".includes(variableFilter.toLowerCase())) {
+        globalResults.push(["math-editor", {
+          label: "🧮 Expressão Matemática → Abrir Editor",
+          value: "__MATH_EDITOR__",
+          icon: "✏️"
+        }]);
+      }
+      
+      if ("dice".includes(variableFilter.toLowerCase()) || "dados".includes(variableFilter.toLowerCase())) {
+        globalResults.push(["dice-editor", {
+          label: "🎲 Dados (Dice) → Abrir Editor",
+          value: "__DICE_EDITOR__",
+          icon: "🎯"
+        }]);
+      }
+      
+      return globalResults;
+    }
+    
+    // Busca normal no nível atual
     return Object.entries(currentLevel).filter(([key, item]: [string, any]) => {
       if (variableFilter === "") return true;
       return item.label.toLowerCase().includes(variableFilter.toLowerCase()) ||
@@ -891,8 +961,8 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
 
       {/* Menu Multi-Level de Variáveis */}
       {showVariables && (
-        <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-64 overflow-hidden">
-          <CardHeader className="py-2 border-b">
+        <Card className="absolute top-full left-0 right-0 z-50 mt-1 max-h-80 overflow-hidden flex flex-col">
+          <CardHeader className="py-2 border-b flex-shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 {currentPath.length > 0 && (
@@ -901,23 +971,32 @@ function MarkdownEditor({ value, onChange, placeholder, sections = [], stats = [
                   </Button>
                 )}
                 <div className="text-sm font-medium">
-                  {currentPath.length === 0 ? "Variáveis" : 
-                   currentPath.map((path, i) => (
-                     <span key={i}>
-                       {i > 0 && " > "}
-                       {menuStructure[currentPath[0]]?.label}
-                       {i > 0 && ` > ${getCurrentLevel()[path]?.label || path}`}
-                     </span>
-                   ))
+                  {variableFilter !== "" && currentPath.length === 0 ? 
+                    `🔍 Busca: "${variableFilter}"` :
+                    currentPath.length === 0 ? "Variáveis" : 
+                    currentPath.map((path, i) => (
+                      <span key={i}>
+                        {i > 0 && " > "}
+                        {menuStructure[currentPath[0]]?.label}
+                        {i > 0 && ` > ${getCurrentLevel()[path]?.label || path}`}
+                      </span>
+                    ))
                   }
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowVariables(false)}>
-                ✕
-              </Button>
+              <div className="flex items-center gap-1">
+                {variableFilter !== "" && currentPath.length === 0 && (
+                  <Button variant="ghost" size="sm" onClick={() => setVariableFilter("")} title="Limpar busca">
+                    🗑️
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => setShowVariables(false)}>
+                  ✕
+                </Button>
+              </div>
             </div>
           </CardHeader>
-          <ScrollArea className="max-h-48">
+          <ScrollArea className="flex-1">
             <CardContent className="p-2">
               <div className="space-y-1">
                 {getFilteredItems().map(([key, item]: [string, any]) => (
@@ -1300,11 +1379,6 @@ function MathExpressionEditor({ value, onChange, stats = [], onConfirm }:{
     { name: 'abs', label: 'abs(x)', desc: 'Valor absoluto' },
     { name: 'sqrt', label: 'sqrt(x)', desc: 'Raiz quadrada' },
     { name: 'pow', label: 'pow(x,y)', desc: 'Potência x^y' },
-    { name: 'log', label: 'log(x)', desc: 'Logaritmo natural' },
-    { name: 'log10', label: 'log10(x)', desc: 'Logaritmo base 10' },
-    { name: 'sin', label: 'sin(x)', desc: 'Seno' },
-    { name: 'cos', label: 'cos(x)', desc: 'Cosseno' },
-    { name: 'tan', label: 'tan(x)', desc: 'Tangente' },
     { name: 'floor', label: 'floor(x)', desc: 'Arredondar para baixo' },
     { name: 'ceil', label: 'ceil(x)', desc: 'Arredondar para cima' },
     { name: 'round', label: 'round(x)', desc: 'Arredondar' },
