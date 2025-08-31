@@ -35,7 +35,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import EmojiPickerReact from "emoji-picker-react";
+import EmojiPickerReact, { EmojiStyle, Theme } from "emoji-picker-react";
 import { evaluate } from "mathjs";
 import { DiceRoll } from '@dice-roller/rpg-dice-roller';
 import MathExpressionEditor from "@/components/unique/MathExpressionEditor";
@@ -1311,8 +1311,15 @@ function CustomEmojiPicker({ value, onChange, placeholder = "ex.: 🗡️"}:{ va
         <EmojiPickerReact 
           onEmojiClick={handleEmojiClick}
           autoFocusSearch={false}
-          width={300}
-          height={400}
+          width={320}
+          height={420}
+          emojiStyle={EmojiStyle.TWITTER}
+          theme={Theme.AUTO}
+          searchPlaceholder="Buscar emojis..."
+          previewConfig={{
+            defaultEmoji: "1f44d",
+            defaultCaption: "Escolha um emoji!"
+          }}
         />
       </PopoverContent>
     </Popover>
